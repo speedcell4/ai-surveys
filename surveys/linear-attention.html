@@ -28,6 +28,16 @@ window.MathJax = {
 <h1>线性注意力速览（Linear Attention，2020 ~ 2026）</h1>
 <p class="sub">把历史压缩进定长 state，复杂度 $O(n)$：kernel 线性 / SSM / delta 规则 / TTT / Titans，及 2025 起的混合旗舰 · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话（问题 / 方法 / 核心）</p>
 
+<section class="lv1-guide">
+<h2>零基础读法：从「记住全部历史」到「只维护一个小状态」</h2>
+<p><b>定义</b>：普通 Transformer 注意力在生成每个 token 时都重新读一遍全部历史，所以历史越长越慢。线性注意力改为维护一个固定大小的 state，每来一个 token 就把它「写进」state，之后只用 state 回答问题。</p>
+<p><b>方法</b>：最早的核化线性注意力把 softmax 拆成两个特征映射，把「先算所有历史再输出」变成「先累计一个矩阵 state」。后来发展出门控、delta 规则和状态空间模型，本质都是设计更好的 state 更新规则，让它该记的记、该忘的忘。</p>
+<p><b>模型</b>：代表包括 Linear Transformer、Performer、Mamba/Mamba-2、RWKV、GLA、TTT、Titans，以及后来把 linear 层和 softmax attention 层混用的旗舰模型。</p>
+<p><b>算法</b>：关键操作是「递推 + 扫描」：训练时可以并行扫描整条序列，推理时只做一步递推。不同方法差别在于 state 大小、是否有数据依赖衰减、能不能做精确联想召回。</p>
+<p><b>评测</b>：看 Long Range Arena、语言建模 perplexity、长程 in-context recall、长度外推，以及真实吞吐/解码延迟。线性方法通常快，但「精确回忆几十万 token 里某个细节」可能不如 softmax 注意力。</p>
+<p>读每篇时问：state 里存了什么？每步怎么更新？它牺牲了什么能力换来速度？</p>
+</section>
+
 <h2>0. 记法（这个领域的「最大公约数」）</h2>
 <p>核心矛盾：softmax 注意力每个 token 都要看全部历史，复杂度 $O(n^2)$。线性注意力这条路线用<b>定长 state 压缩全部历史</b>，把复杂度压到 $O(n)$、解码内存 $O(1)$——代价是「记不全」。配方围绕「state 怎么更新」这一轴（另一条路「只算重要的 token 对」见 <a href="sparse-attention.html">sparse-attention.html</a>）：</p>
 <table>

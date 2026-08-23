@@ -28,6 +28,16 @@ window.MathJax = {
 <h1>统一多模态模型速览（Unified Multimodal Models）</h1>
 <p class="sub">覆盖 2022 ~ 2026 · 聚焦「理解 + 生成放进同一个模型」· 检索时间 2026-08-23 · 每篇 = 配方 + 一句话（问题 / 方法 / 效果）</p>
 
+<section class="lv1-guide">
+<h2>零基础读法：先弄懂「理解」和「生成」为什么难放一起</h2>
+<p><b>定义</b>：理解任务（看图回答问题、识别物体）需要语义表示；生成任务（文生图）需要能还原出细节的表示。统一多模态模型想把这两个任务放进同一个 Transformer，并尽量共享视觉表示。</p>
+<p><b>方法</b>：图像进入模型有几种选择：离散 VQ token、VAE 连续 latent、CLIP/DINO 语义表示、或直接原始像素 patch。理解通常用自回归 next-token；生成则可用离散 AR 或连续 flow/diffusion。共享与否则是另一个轴。</p>
+<p><b>模型</b>：Chameleon、Emu3 走全离散 AR；Transfusion、Show-o 把文本 AR 和图像扩散/flow 放进一个模型；Tuna 系列把 VAE 与语义表示级联；encoder-free 路线直接吃像素。</p>
+<p><b>算法</b>：文本 token 用交叉熵；离散图像 token 也用交叉熵；连续图像 token 常用 flow matching 的 MSE，回归速度或干净 patch。共享主干还是拆开 head，会直接影响训练稳定和两个任务是否打架。</p>
+<p><b>评测</b>：理解看 MMMU、VQAv2、OCRBench、V* 等；生成看 GenEval、DPG-Bench、FID/CLIP score；真正难的是看联合训练后是否比单任务模型更强，而不是互相拖累。</p>
+<p>读每篇时问：视觉表示是什么格式？理解和生成各用什么目标？哪些部分是共享的？</p>
+</section>
+
 <h2>0. 记法（这个领域的「最大公约数」）</h2>
 <p>统一多模态模型最关键的对比维度不是「预测什么 + 什么损失」（这些模型基本都有 next-token / flow / diffusion 目标），而是三件事：<b>图像怎么进模型、理解/生成各用什么目标、两者共享还是分离</b>。所以配方记法围绕这三个轴：</p>
 <table>

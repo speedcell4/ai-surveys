@@ -28,6 +28,16 @@ window.MathJax = {
 <h1>LLM 强化学习速览（RL for LLMs，2017 ~ 2026）</h1>
 <p class="sub">GRPO → GSPO / GEPO → DAPO 这条线 + credit assignment + on-policy 蒸馏（GKD/SDPO/SDFT/OPD/OPSD/MOPD）· 挑重点：节点性文章 + 知名 repo 已实现的算法 · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话</p>
 
+<section class="lv1-guide">
+<h2>零基础读法：先把「强化学习训练语言模型」拆成五件事</h2>
+<p><b>定义</b>：语言模型已经会用 next-token 预测说话，但用户希望它「答案更正确、更符合偏好、推理更靠谱」。RL for LLMs 就是在已有模型基础上，用奖励或偏好信号再调一步。</p>
+<p><b>方法</b>：一条路是显式 RL，先定义奖励，再优化策略；另一条路是 DPO，把偏好对直接变成分类损失，不用单独训奖励模型。现在主流常把奖励分成结果奖励和过程奖励，决定信号是 response 级还是 token 级。</p>
+<p><b>模型</b>：基础模型通常先 SFT，再 RL。代表产品/方法包括 InstructGPT/RLHF、DeepSeek-R1、Kimi k1.5；算法层有 PPO、GRPO、DAPO、GSPO/GEPO。</p>
+<p><b>算法</b>：PPO 用价值模型算优势；GRPO 干脆不要价值模型，对同一个 prompt 采样一组答案，用组内均值和标准差做相对优势；DAPO 再修 clip、动态采样和 token 级损失。后来还有 on-policy 蒸馏，用强 teacher 的 token 分布替代稀疏奖励。</p>
+<p><b>评测</b>：数学/代码看 AIME、MATH、LiveCodeBench；通用能力看 MMLU；工程上还看训练稳定性、KL 漂移、长度膨胀和采样效率。只看分数不够，还要看奖励是不是被 hack。</p>
+<p>读每篇时抓住两问：奖励从哪里来？奖励/优势分到 response 还是 token？</p>
+</section>
+
 <h2>0. 记法（这个领域的「最大公约数」）</h2>
 <p>LLM 强化学习的核心问题只有两个：<b>用什么信号</b>（奖励从哪来）和<b>把信号分给谁</b>（credit assignment）。所有算法都在回答「advantage 怎么算、奖励/优势分到 response 级还是 token 级」。配方围绕这两轴：</p>
 <table>

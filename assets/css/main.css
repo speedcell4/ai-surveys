@@ -278,6 +278,14 @@ body.lv1 .deep .paper {
   display: block;
 }
 
+.lv1-guide {
+  display: none;
+}
+
+body.lv1 .lv1-guide {
+  display: block;
+}
+
 body.lv1 .note,
 body.lv2 .note {
   display: none;

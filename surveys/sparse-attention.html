@@ -28,6 +28,16 @@ window.MathJax = {
 <h1>稀疏注意力速览（Sparse Attention，2019 ~ 2026）</h1>
 <p class="sub">保留精确注意力、只算「选中的」token 对——核心问题是<b>选 block 还是选 token、怎么选</b> · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话（问题 / 方法 / 核心）</p>
 
+<section class="lv1-guide">
+<h2>零基础读法：从「注意力为什么贵」到「怎么评价稀疏化」</h2>
+<p><b>定义</b>：Transformer 的自注意力让每个 token 都看前面所有 token，所以序列长度 n 增大时，算力近似按 n² 增长。稀疏注意力的目标是不改「注意力要算得准」这件事，只把 n² 里明显不重要的部分跳过。</p>
+<p><b>方法</b>：两种主要粒度。选 block 是把连续 token 分成块，只处理整块，硬件更友好；选 token 是直接挑单个 token，更细但更难在 GPU 上高效实现。选择方式可以手工设计、MoE 式路由，或让模型学一个 indexer。</p>
+<p><b>模型</b>：早期 Longformer、BigBird 用滑窗 + 全局 token + 随机模式；近期 MoBA 用 MoE 路由选块，NSA 组合压缩/选择/滑窗，MiniMax MSA 在 GQA 组内做 Top-k 块选择，DeepSeek DSA 做 token 级选择。</p>
+<p><b>算法</b>：核心循环是「打分 → 选 Top-k → 精确注意力」。打分可以用 query-key 分数、路由分数或 landmark 相似度；选择后要保证 KV 访问连续、能上 tensor core，否则理论稀疏换不来实际加速。</p>
+<p><b>评测</b>：通常看语言建模 perplexity、长上下文检索准确率、1M 上下文下的注意力 FLOPs/KV 缓存降幅，以及实际 prefill/decode 延迟。高质量工作必须同时给出「质量掉多少」和「速度省多少」。</p>
+<p>所以看每篇论文时，先问三句：它选 block 还是 token？靠什么规则选？省掉的算力是否真变成端到端加速？</p>
+</section>
+
 <h2>0. 记法（这个领域的「最大公约数」）</h2>
 <p>稀疏注意力 = 不把 $O(n^2)$ 的注意力矩阵全算一遍，而是先「选」出值得算的 token 对，再在子集上做精确注意力。所有方法的差别最终落在两个轴：<b>选择粒度</b>（选 block 还是选 token）和<b>选择方式</b>（手工规则 / 路由 / 学习）。配方围绕这两轴：</p>
 <table>

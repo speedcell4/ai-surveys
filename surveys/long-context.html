@@ -28,6 +28,16 @@ window.MathJax = {
 <h1>长上下文速览（Long Context，2020 ~ 2026）</h1>
 <p class="sub">一条主线：从「注意力算不起长序列」到「怎么又准又便宜地用满 64K → 1M」· 每篇 = 配方 + 一句话（问题 / 方法 / 核心）· 检索时间 2026-08-23</p>
 
+<section class="lv1-guide">
+<h2>零基础读法：长上下文其实同时解决四个问题</h2>
+<p><b>定义</b>：让模型一次读一本书、一个仓库或一整段 agent 轨迹，而不是只读几页。难点不是「能不能读」，而是注意力计算和显存会随序列长度暴涨。</p>
+<p><b>方法</b>：大致分五条路——稀疏注意力（只算部分历史）、线性/状态空间（把历史压成定长 state）、KV 压缩/驱逐（只留重要缓存）、位置编码外推（让短序列训练也能用长序列）、以及工程实现（FlashAttention、PagedAttention）。</p>
+<p><b>模型</b>：Transformer 是底座；方法层有 Longformer、InfLLM、LongRoPE、YaRN、MInference、RingAttention 等。近年旗舰通常不只用一种，而是混合 sparse + linear + sliding window。</p>
+<p><b>算法</b>：核心是给每个历史 token 决定「算不算、存不存、怎么打分」。例如稀疏注意力选块/选 token，KV cache 按重要性驱逐，位置编码用 RoPE 插值或外推来支持更长长度。</p>
+<p><b>评测</b>：别只看「能输入多长」，要看 LongBench、RULER、needle-in-a-haystack 这类检索与推理测试，同时报告 perplexity、显存和延迟。很多模型声称 1M 上下文，但真实检索精度可能并不高。</p>
+<p>读每篇时问：它省的是计算、显存还是外推能力？省下来后准确率掉了多少？</p>
+</section>
+
 <h2>0. 记法（这个领域的「最大公约数」）</h2>
 <p>长上下文要同时回答四件事：<b>注意力怎么算</b>（复杂度）、<b>KV 怎么存</b>（显存）、<b>长度怎么外推</b>（位置编码）、<b>怎么客观测出真实长度</b>（benchmark）。配方围绕这四轴：</p>
 <table>
