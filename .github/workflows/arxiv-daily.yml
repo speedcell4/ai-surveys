@@ -1,0 +1,62 @@
+name: Daily arXiv monitor
+
+on:
+  schedule:
+    # UTC 02:00 == Asia/Shanghai 10:00, after arXiv's daily listing refresh.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      since_hours:
+        description: 'How far back to look for arXiv submissions, in hours.'
+        required: false
+        default: '36'
+
+permissions:
+  contents: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    concurrency:
+      group: arxiv-daily-monitor
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Fetch recent arXiv candidates
+        env:
+          SINCE_HOURS: ${{ github.event.inputs.since_hours || '36' }}
+        run: python3 scripts/fetch_arxiv_candidates.py "$SINCE_HOURS"
+
+      - name: Run Codex
+        uses: openai/codex-action@v1
+        with:
+          # The action only needs a Responses-compatible API key. Set the
+          # endpoint variable if the model is served by a non-OpenAI provider.
+          openai-api-key: ${{ secrets.CODEX_API_KEY }}
+          responses-api-endpoint: ${{ vars.CODEX_RESPONSES_ENDPOINT }}
+          model: ${{ vars.CODEX_MODEL || 'deepseek-v4-pro' }}
+          prompt-file: prompts/arxiv-daily.md
+          # Legacy workspace-write allows Codex to edit this repo and use the
+          # network for arXiv/Semantic Scholar verification.
+          sandbox: workspace-write
+          allow-bots: true
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git add -A
+          git commit -m "Daily arXiv monitor update"
+          git push origin "HEAD:${{ github.ref_name }}"
