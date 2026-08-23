@@ -316,14 +316,14 @@ window.MathJax = {
 <h3>2.8 自回归（AR）路线：离散 token → 连续 token → 像素 token</h3>
 <p class="trend">与扩散并行的是自回归（像 LLM 一样逐 token 生成）。早期用离散 token（VQ），后来连续 token、再到与扩散合流，两条路线在「像素 token」上汇合。</p>
 <p class="paper"><b>VQGAN（Taming Transformers）</b>（<a href="https://arxiv.org/abs/2012.09841">2012.09841</a>）<br>
-<code class="recipe">ar(vq(patch)) -&gt; next-token-loss（VQ 离散化）</code><br>
+<code class="recipe">ar(vq(patch)) -&gt; ce(h_t, x_{t+1}) [h_t = 位置 t 的 codebook logits；x_{t+1} = 下一真实 VQ code index]（VQ 离散化）</code><br>
 <span class="idea"><span class="p">问题</span> 图像生成缺好用的离散 token；<span class="p">方法</span> VQ-VAE 学离散 codebook + transformer 建模；<span class="p">核心</span> 离散视觉 token 的源头，LlamaGen/VAR 的底座。</span></p>
 
 <p class="paper"><b>LlamaGen</b>（<a href="https://arxiv.org/abs/2406.06525">2406.06525</a>）<br>
-<code class="recipe">ar(vq(patch)) -&gt; next-token-loss</code><br>
+<code class="recipe">ar(vq(patch)) -&gt; ce(h_t, x_{t+1}) [h_t = codebook logits；x_{t+1} = 下一真实 VQ code index]</code><br>
 <span class="idea"><span class="p">问题</span> AR 路线能不能做出 SOTA 图像生成（当时被扩散压着）；<span class="p">方法</span> 把 LLM 的 vanilla next-token prediction 直接搬到 VQ token 上；<span class="p">核心</span> 证明「普通 AR 也能打」，拉开视觉 AR 的序幕。</span></p>
 <p class="paper"><b>VAR</b>（<a href="https://arxiv.org/abs/2404.02905">2404.02905</a>）<br>
-<code class="recipe">ar(vq 多尺度) -&gt; next-scale-loss</code><br>
+<code class="recipe">ar(vq 多尺度) -&gt; ce(h_r, x_r) [h_r = scale r 的 codebook logits；x_r = scale r 的真实 token map]</code><br>
 <span class="idea"><span class="p">问题</span> 逐 token（光栅序）生成又慢又违反图像的层级结构；<span class="p">方法</span> 多尺度 VQ + 从粗到细逐尺度预测；<span class="p">核心</span> next-scale 取代 next-token。</span></p>
 <p class="paper"><b>MAR</b>（<a href="https://arxiv.org/abs/2406.11838">2406.11838</a>）<br>
 <code class="recipe">ar(mask patch) -&gt; diffusion-loss</code><br>
@@ -332,7 +332,7 @@ window.MathJax = {
 <code class="recipe">ar(patch 连续 token) -&gt; flow-loss（随机序）</code><br>
 <span class="idea"><span class="p">问题</span> 离散 token + 光栅序不是最优；<span class="p">方法</span> 连续 token + 随机序自回归；<span class="p">核心</span> 连续 + 随机序比离散 + 光栅序更好。</span></p>
 <p class="paper"><b>LongCat-Next</b>（<a href="https://arxiv.org/abs/2603.27538">2603.27538</a>）<br>
-<code class="recipe">ar(discrete text+image+audio) -&gt; next-token-loss [dNaViT]</code><br>
+<code class="recipe">ar(discrete text+image+audio) -&gt; ce(h_t, x_{t+1}) [h_t = 统一离散词表 logits；x_{t+1} = 下一 token id] [dNaViT]</code><br>
 <span class="idea"><span class="p">问题</span> 各模态各自一套 tokenizer / model；<span class="p">方法</span> 把所有模态词元化成同一离散 token 空间，纯 NTP 一个模型搞定；<span class="p">核心</span> 离散原生多模态（MoE A3B、2T tokens）。</span></p>
 
 <p class="paper"><b>Farmer</b>（<a href="https://arxiv.org/abs/2510.23588">2510.23588</a>）<br>
@@ -340,19 +340,19 @@ window.MathJax = {
 <span class="idea"><span class="p">问题</span> 离散 token 有量化损失；<span class="p">方法</span> 像素上用 flow 自回归连续 token；<span class="p">核心</span> 无量化损失的像素自回归。</span></p>
 
 <p class="paper"><b>Fractal Generative Models</b>（<a href="https://arxiv.org/abs/2502.17437">2502.17437</a>）<br>
-<code class="recipe">ar(patch 多粒度) -&gt; 分形 next-token-loss</code><br>
+<code class="recipe">ar(patch 多粒度) -&gt; 分形 ce(h_l, x_l) [h_l = 层级 l 的下一 token logits；x_l = 该层真实 token / pixel index]</code><br>
 <span class="idea"><span class="p">问题</span> AR 逐像素/逐 token 低效、生成慢；<span class="p">方法</span> 用「分形」把生成模块化成多粒度自回归、可并行动态规划；<span class="p">核心</span> 像素级自回归的分形扩展（何恺明组）。</span></p>
 
 <p class="paper"><b>D-AR（Diffusion via Autoregressive）</b>（<a href="https://iclr.cc/virtual/2026/poster/10010275">ICLR 2026</a>）<br>
-<code class="recipe">ar(扩散 token) -&gt; next-token-loss</code><br>
+<code class="recipe">ar(扩散 token) -&gt; ce(h_t, x_{t+1}) [h_t = codebook logits；x_{t+1} = 下一扩散 token 的离散 index]</code><br>
 <span class="idea"><span class="p">问题</span> 扩散与 AR 是两套范式；<span class="p">方法</span> 把扩散过程重写成标准 next-token 预测；<span class="p">核心</span> 普通 LLM 解码器就能生成图像。</span></p>
 
 <p class="paper"><b>NextStep-1</b>（<a href="https://mlanthology.org/iclr/2026/han2026iclr-nextstep1/">ICLR 2026</a>）<br>
-<code class="recipe">ar(patch 连续 token) -&gt; next-token-loss</code><br>
+<code class="recipe">ar(text离散 + image连续) -&gt; ce(h_text, x_next) + mse(v_hat, v_target) [h_text = LM head logits；x_next = 下一文本 token id；v_hat = flow head 预测速度；v_target = 干净 patch 与噪声 patch 的速度差]</code><br>
 <span class="idea"><span class="p">问题</span> 连续 token 自回归难上规模；<span class="p">方法</span> 14B 连续 token 自回归；<span class="p">核心</span> 大规模连续 token 文生图。</span></p>
 
 <p class="paper"><b>PRA（Parallel Rollout Approximation）</b>（<a href="https://arxiv.org/abs/2606.27978">2606.27978</a>）<br>
-<code class="recipe">ar(patch 连续 token) -&gt; next-token-loss + 并行 rollout</code><br>
+<code class="recipe">ar(patch 连续 token) -&gt; mse(v_hat, v_target) + 并行 rollout [h = prefix hidden state；v_hat = flow head(h, x_i^t, t)；v_target = 目标 patch 的直线速度]</code><br>
 <span class="idea"><span class="p">问题</span> 像素自回归质量差；<span class="p">方法</span> 并行 rollout 近似；<span class="p">核心</span> 提升像素自回归质量。</span></p>
 
 <p class="paper"><b>MAR-GRPO</b>（<a href="https://arxiv.org/abs/2604.06966">2604.06966</a>）<br>
@@ -360,7 +360,7 @@ window.MathJax = {
 <span class="idea"><span class="p">问题</span> 掩码自回归 + 扩散头训练不稳定；<span class="p">方法</span> 用 GRPO 稳定化；<span class="p">核心</span> 解决扩散头的噪声梯度。</span></p>
 
 <p class="paper"><b>NextFlow</b>（<a href="https://arxiv.org/abs/2601.02204">2601.02204</a>）<br>
-<code class="recipe">transformer_shared (codebook_sem + codebook_pix) -&gt; next-token-loss</code><br>
+<code class="recipe">transformer_shared (codebook_sem + codebook_pix) -&gt; ce(h_t, x_{t+1}) [h_t = 双 codebook 拼接后的 logits；x_{t+1} = 下一语义/像素 token id]</code><br>
 <span class="idea"><span class="p">问题</span> 语义与像素难统一建模；<span class="p">方法</span> 双 codebook 解耦语义与像素；<span class="p">核心</span> 6T 图文 token 统一自回归。</span></p>
 
 <h3>2.9 统一多模态 / 视觉基础模型</h3>
