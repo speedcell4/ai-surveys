@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixel Diffusion 速览（2025-08 ~ 2026-08）</title>
+<style>
+:root { --accent:#2563eb; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#f6f8fb; }
+* { box-sizing: border-box; }
+body { margin:0; background:#fafafa; color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  line-height:1.7; font-size:16px; }
+.container { max-width:920px; margin:0 auto; padding:44px 28px 96px; background:#fff; box-shadow:0 0 0 1px var(--border); min-height:100vh; }
+h1 { font-size:1.8em; line-height:1.35; border-bottom:2px solid var(--accent); padding-bottom:.4em; margin:.1em 0 .2em; }
+.sub { color:var(--muted); margin-top:0; }
+h2 { font-size:1.35em; margin-top:2.1em; border-bottom:1px solid var(--border); padding-bottom:.3em; }
+h3 { font-size:1.1em; margin-top:1.7em; color:#111827; }
+a { color:var(--accent); text-decoration:none; }
+a:hover { text-decoration:underline; }
+table { width:100%; border-collapse:collapse; margin:1.2em 0; font-size:.95em; }
+th,td { border:1px solid var(--border); padding:.5em .75em; text-align:left; vertical-align:top; }
+th { background:#f3f4f6; }
+tr:nth-child(even) td { background:#fafafa; }
+blockquote { border-left:4px solid var(--accent); margin:1.2em 0; padding:.45em 1em; background:var(--bg); color:#374151; border-radius:0 6px 6px 0; }
+.paper { margin:1.15em 0; }
+.paper b { color:#111827; }
+code.recipe { display:inline-block; margin:.35em 0; background:var(--bg); border-left:3px solid var(--accent); padding:.32em .7em; border-radius:5px; font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:.92em; color:#111827; }
+.idea { color:#374151; }
+.idea .p { color:#b91c1c; font-weight:600; }
+.trend { color:#374151; background:#eff6ff; border-left:3px solid #2563eb; padding:.5em .8em; border-radius:5px; margin:.5em 0 1em; }
+hr { border:none; border-top:1px solid var(--border); margin:2.2em 0; }
+.note { color:var(--muted); font-size:.92em; }
+ol,ul { padding-left:1.4em; }
+li { margin:.3em 0; }
+@media (max-width:640px){ .container{padding:28px 16px 64px;} body{font-size:15px;} }
+</style>
+</head>
+<body>
+<main class="container">
+
+<h1>Pixel Diffusion 速览：每篇一个「配方」+ 一句话</h1>
+<p class="sub">覆盖 2025-08 ~ 2026-08 · 面向没读过这些论文的读者 · 检索时间 2026-08-23</p>
+
+<h2>0. 先看懂「配方」记法</h2>
+<table>
+<tr><th>记号</th><th>意思</th></tr>
+<tr><td><code>flow(A + noise)</code></td><td>flow matching / rectified flow，在 A 上从噪声流向数据</td></tr>
+<tr><td><code>diffuse(A + noise)</code></td><td>DDPM 式去噪扩散，在 A 上逐步去噪</td></tr>
+<tr><td><code>meanflow(A + noise)</code></td><td>MeanFlow 式一步流</td></tr>
+<tr><td><code>ar(A)</code></td><td>自回归（next-token）</td></tr>
+<tr><td><code>patch</code></td><td>patchify 后的原始像素</td></tr>
+<tr><td><code>vae(patch)</code></td><td>VAE 压缩后的潜空间</td></tr>
+<tr><td><code>-&gt; pred + loss</code></td><td>网络预测 pred（ε / v / x / consistency），用 loss 做损失</td></tr>
+<tr><td><code>ε-loss / v-loss / x-loss / consistency-loss</code></td><td>损失类型：噪声 MSE / 速度 MSE / 干净图 MSE / 一致性损失</td></tr>
+<tr><td><code>X_shared</code></td><td>X 由「理解 + 生成」共享</td></tr>
+<tr><td><code>X_und + X_gen</code></td><td>理解与生成各自独立（两套 X）</td></tr>
+<tr><td><code>X (Y_und + Y_gen)</code></td><td>X 共享，其内部 Y 拆成 und / gen 两份</td></tr>
+</table>
+<blockquote>扩散/流模型 = 「逐步加噪声，再学一个网络把噪声往回推」。老路线为省钱把「推」搬进 VAE 潜空间；这波 pixel diffusion 的核心就是<b>把「推」直接搬回原始像素，省掉 VAE</b>。</blockquote>
+
+<h2>1. 主线：谁、克服了什么</h2>
+<ol>
+<li>「像素太贵，必须潜空间」→ 被 <b>simple diffusion / 噪声调度 / RIN / HDiT</b> 拆掉：端到端像素也能到 1024²。</li>
+<li>「必须预测噪声/速度」→ 被 <b>JiT</b> 拆掉：直接预测干净图（x-pred）就行。</li>
+<li>「必须多步采样」→ 被 <b>MeanFlow / pMF</b> 拆掉：一步生成。</li>
+<li>「必须有 VAE 才有表示」→ 被 <b>EPG</b> 拆掉：自监督预训练替代 VAE。</li>
+<li>「像素丢高频 / 一个 patch 粒度难兼顾全局+局部」→ 被 <b>DeCo / DiP / PixelDiT / HyperDiT</b> 逐个补。</li>
+<li>「生成与理解割裂」→ 被 <b>HiDream-O1 / NextFlow / UniFlow</b> 往统一模型推。</li>
+<li>「视觉生成缺缩放律」→ 被 <b>Abra</b> 补上。</li>
+</ol>
+<p>更宏观地看，是三个「轴」在同时收敛：</p>
+<table>
+<tr><th>轴</th><th>从</th><th>到</th><th>代表</th></tr>
+<tr><td>空间</td><td>latent（VAE）</td><td>pixel（无 VAE）</td><td>JiT / PixelDiT / L2P / PiD</td></tr>
+<tr><td>步数</td><td>多步</td><td>少步 / 一步</td><td>MeanFlow / pMF / CrossFlow</td></tr>
+<tr><td>范式</td><td>diffusion / flow</td><td>autoregressive</td><td>D-AR / PRA / NextFlow / Transfusion</td></tr>
+</table>
+<p>三条轴的交点就是同一个目标：<b>一个 Transformer、像素 token、理解+生成统一</b>（HiDream-O1、NextFlow）。</p>
+
+<h2>2. 逐篇配方 + 一句话</h2>
+
+<h3>2.1 历史铺垫（窗口前，必要背景）</h3>
+<p class="trend">扩散最早直接在像素上「逐步加噪再学去噪」，但每步跑全分辨率太贵，于是转向 VAE 潜空间（LDM / Stable Diffusion）成为主流——代价是有损压缩、非端到端，给后来「回归像素」埋下伏笔。与此同时，score matching（SDE）→ flow matching → rectified flow → stochastic interpolants → SiT 这一支「把生成当速度场」的理论在 2022-2024 年成熟，是下面所有 `flow(...)` 记号的底座。</p>
+
+<p class="paper"><b>DDPM</b>（<a href="https://arxiv.org/abs/2006.11239">2006.11239</a>）<br>
+<code class="recipe">diffuse(patch + noise) -&gt; ε-pred + ε-loss</code><br>
+<span class="idea"><span class="p">问题</span> GAN 训练不稳、易模式崩塌；<span class="p">方法</span> 把生成改成「逐步加噪→逐步去噪」，网络直接预测噪声；<span class="p">核心</span> 把难的「一步生成」拆成很多步简单的「去噪」。</span></p>
+
+<p class="paper"><b>LDM / Stable Diffusion</b>（<a href="https://arxiv.org/abs/2112.10752">2112.10752</a>）<br>
+<code class="recipe">diffuse(vae(patch) + noise) -&gt; ε-pred + ε-loss</code><br>
+<span class="idea"><span class="p">问题</span> 像素空间去噪每步都跑全分辨率、太贵；<span class="p">方法</span> 先用 VAE 压到潜空间再扩散；<span class="p">核心</span> VAE 有损、且「重建」与「生成」目标错位——正是后来「回归像素」要解决的痛点。</span></p>
+
+<p class="paper"><b>DiT</b>（<a href="https://arxiv.org/abs/2212.09748">2212.09748</a>）<br>
+<code class="recipe">diffuse(vae(patch) + noise) -&gt; ε-pred + ε-loss（U-Net → ViT）</code><br>
+<span class="idea"><span class="p">问题</span> U-Net 难随参数规模扩展；<span class="p">方法</span> 用 ViT 替换 U-Net 做扩散骨干；<span class="p">核心</span> 这是后来所有 pDiT 的架构底座。</span></p>
+
+<p class="paper"><b>U-ViT</b>（<a href="https://arxiv.org/abs/2209.12152">2209.12152</a>）<br>
+<code class="recipe">diffuse(vae(patch) + noise) -&gt; ε-pred + ε-loss（ViT + 长跳跃连接）</code><br>
+<span class="idea"><span class="p">问题</span> 纯 ViT 难保留细节；<span class="p">方法</span> 加长跳跃连接的 U 形 ViT；<span class="p">核心</span> 这个 U 形思路后来被 PixelU 捡回。</span></p>
+
+<p class="paper"><b>simple diffusion</b>（<a href="https://arxiv.org/abs/2301.11093">2301.11093</a>）<br>
+<code class="recipe">diffuse(patch + noise) -&gt; ε-pred + ε-loss + 分辨率相关噪声调度</code><br>
+<span class="idea"><span class="p">问题</span> 「像素扩散上不了高分辨率」的共识；<span class="p">方法</span> 调对噪声调度直接端到端像素生成；<span class="p">核心</span> 第一个有力挑战「必须潜空间」。</span></p>
+
+<p class="paper"><b>On the Importance of Noise Scheduling</b>（<a href="https://arxiv.org/abs/2301.10972">2301.10972</a>）<br>
+<code class="recipe">diffuse(patch + noise) -&gt; ε-pred + ε-loss + 自适应噪声调度</code><br>
+<span class="idea"><span class="p">问题</span> 噪声调度不对导致像素扩散质量差；<span class="p">方法</span> 随分辨率自适应调调度；<span class="p">核心</span> 配 RIN 做到 1024²。</span></p>
+
+<p class="paper"><b>RIN（Recurrent Interface Networks）</b>（<a href="https://arxiv.org/abs/2212.11972">2212.11972</a>）<br>
+<code class="recipe">diffuse(patch + noise) -&gt; ε-pred + ε-loss（循环接口网络）</code><br>
+<span class="idea"><span class="p">问题</span> 高分辨率下注意力算力爆表；<span class="p">方法</span> 用少量「接口 token」循环更新；<span class="p">核心</span> 省算力做大分辨率。</span></p>
+
+<p class="paper"><b>Hourglass DiT</b>（<a href="https://arxiv.org/abs/2401.11605">2401.11605</a>）<br>
+<code class="recipe">diffuse(patch + noise) -&gt; v-pred + v-loss（沙漏式多尺度）</code><br>
+<span class="idea"><span class="p">问题</span> 高分辨率 token 太多；<span class="p">方法</span> 先压缩后展开的沙漏结构；<span class="p">核心</span> 多尺度做高分辨率像素合成。</span></p>
+
+<p class="paper"><b>Simpler Diffusion (SiD2)</b>（<a href="https://arxiv.org/abs/2410.19324">2410.19324</a>）<br>
+<code class="recipe">diffuse(patch + noise) -&gt; v-pred + sigmoid loss（噪声调度）</code><br>
+<span class="idea"><span class="p">问题</span> 像素扩散质量长期不如潜空间；<span class="p">方法</span> sigmoid 损失 + 分辨率相关调度；<span class="p">核心</span> 512² 达 1.5 FID，打平潜空间。</span></p>
+
+<p class="paper"><b>Score-Based Generative Modeling through SDEs</b>（<a href="https://arxiv.org/abs/2011.13456">2011.13456</a>）<br>
+<code class="recipe">diffuse(A + noise) -&gt; score-pred + score-loss（SDE 统一）</code><br>
+<span class="idea"><span class="p">问题</span> 扩散与 score matching 各自为战；<span class="p">方法</span> 用随机微分方程（SDE）统一 DDPM 与 score matching；<span class="p">核心</span> score-based 生成的理论统一，是 `diffuse(...)` 记号的源头。</span></p>
+
+<p class="paper"><b>Flow Matching</b>（<a href="https://arxiv.org/abs/2210.02747">2210.02747</a>）<br>
+<code class="recipe">flow(A + noise) -&gt; v-pred + flow-loss（条件概率路径）</code><br>
+<span class="idea"><span class="p">问题</span> 连续流训练难、扩散要复杂调度；<span class="p">方法</span> 在噪声-数据点对间定义简单条件概率路径、直接回归速度场 v；<span class="p">核心</span> 把生成变成「学速度场」，是本综述所有 `flow(...)` 记号的范式源头。</span></p>
+
+<p class="paper"><b>Rectified Flow</b>（<a href="https://arxiv.org/abs/2209.03003">2209.03003</a>）<br>
+<code class="recipe">flow(A + noise) -&gt; v-pred + rectified flow-loss（直线路径 + reflow）</code><br>
+<span class="idea"><span class="p">问题</span> 流路径弯曲、采样步数多；<span class="p">方法</span> 用直线路径连接噪声与数据、反复「拉直」（reflow）；<span class="p">核心</span> 直线流让采样更少步、更稳。</span></p>
+
+<p class="paper"><b>Stochastic Interpolants</b>（<a href="https://arxiv.org/abs/2303.08797">2303.08797</a>）<br>
+<code class="recipe">flow(A + noise) -&gt; v-pred + interpolant-loss（统一 SDE/ODE）</code><br>
+<span class="idea"><span class="p">问题</span> 扩散与流是两套形式、不好统一；<span class="p">方法</span> 用随机插值（stochastic interpolant）统一 SDE/ODE 视角、噪声与路径可自由选；<span class="p">核心</span> 扩散与流的统一理论框架（SiT 的理论底座）。</span></p>
+
+<p class="paper"><b>EDM（Elucidating the Design Space）</b>（<a href="https://arxiv.org/abs/2206.00364">2206.00364</a>）<br>
+<code class="recipe">diffuse(A + noise) -&gt; ε-pred + ε-loss（设计空间/调度）</code><br>
+<span class="idea"><span class="p">问题</span> 扩散超参繁杂、难调；<span class="p">方法</span> 系统厘清设计空间、给出最优噪声调度与参数化；<span class="p">核心</span> 噪声调度的「圣经」，简单扩散/RIN/SiD2 都从它出发。</span></p>
+
+<p class="paper"><b>Consistency Models</b>（<a href="https://arxiv.org/abs/2303.01469">2303.01469</a>）<br>
+<code class="recipe">consistency(A + noise) -&gt; consistency-pred + consistency-loss</code><br>
+<span class="idea"><span class="p">问题</span> 多步采样慢；<span class="p">方法</span> 学「任意噪声直接映射到干净图」的一致性映射、可一步生成；<span class="p">核心</span> 一致性损失 = 本综述 EPG/CrossFlow 里 consistency-loss 的源头。</span></p>
+
+<p class="paper"><b>SiT（Scalable Interpolant Transformers）</b>（<a href="https://arxiv.org/abs/2401.08740">2401.08740</a>）<br>
+<code class="recipe">flow(A + noise) -&gt; v-pred + v-loss（interpolant Transformer）</code><br>
+<span class="idea"><span class="p">问题</span> DiT 是扩散专用、没系统探索流；<span class="p">方法</span> 把 DiT 放进插值框架、系统对比流 vs 扩散；<span class="p">核心</span> 流的 DiT 版本，pDiT 的直接前身。</span></p>
+
+<p class="paper"><b>Imagen（Cascaded Diffusion）</b>（<a href="https://arxiv.org/abs/2205.11487">2205.11487</a>）<br>
+<code class="recipe">diffuse(patch + noise) -&gt; ε-pred + ε-loss（级联 64²→1024²）</code><br>
+<span class="idea"><span class="p">问题</span> 文生图想要高保真；<span class="p">方法</span> 在像素空间做级联超分（64²→256²→1024²）+ 大语言模型编码文本；<span class="p">核心</span> 早期像素空间文生图（级联），证明像素扩散可行。</span></p>
+
+<p class="paper"><b>SD3（Scaling Rectified Flow Transformers）</b>（<a href="https://arxiv.org/abs/2403.03206">2403.03206</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + flow-loss（MMDiT + rectified flow）</code><br>
+<span class="idea"><span class="p">问题</span> rectified flow 能否上规模；<span class="p">方法</span> MMDiT（文本/图像双流）+ rectified flow 做大文生图；<span class="p">核心</span> rectified flow 的规模化验证，pixel flow 的重要前身。</span></p>
+
+<h3>2.2 像素空间 flow 时代（2025 年中）</h3>
+<p class="trend">2025 年中，flow matching 取代 DDPM 式去噪成为新范式（一条直线从噪声流到数据、更好训）。有人开始直接在像素空间做 flow，证明不靠 VAE 也能端到端生成。</p>
+
+<p class="paper"><b>PixelFlow</b>（<a href="https://arxiv.org/abs/2504.07963">2504.07963</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（级联多分辨率）</code><br>
+<span class="idea"><span class="p">问题</span> 像素扩散又慢又贵；<span class="p">方法</span> 用 rectified flow + 从低到高的级联；<span class="p">核心</span> 端到端、无需 VAE。</span></p>
+
+<p class="paper"><b>PixNerd</b>（<a href="https://arxiv.org/abs/2507.23268">2507.23268</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（NeRF 隐式场头）</code><br>
+<span class="idea"><span class="p">问题</span> DiT 线性投影显存大、慢；<span class="p">方法</span> 把线性投影换成隐式神经场（NeRF 头）；<span class="p">核心</span> 省显存又更快。</span></p>
+
+<h3>2.3 奠基催化（2025-10 ~ 2026-01）</h3>
+<p class="trend">2025 末到 2026 初的三个开关一起引爆了热潮：JiT 用 x-prediction 拆掉「必须预测噪声/速度」，MeanFlow 拆掉「必须多步」，EPG 拆掉「必须有 VAE」。</p>
+
+<p class="paper"><b>MeanFlow</b>（<a href="https://arxiv.org/abs/2505.13447">2505.13447</a>）<br>
+<code class="recipe">meanflow(patch + noise) -&gt; v-pred + v-loss（一步）</code><br>
+<span class="idea"><span class="p">问题</span> 多步采样慢；<span class="p">方法</span> 用「平均速度场」把多步压成一步；<span class="p">核心</span> 一步生成建模框架。</span></p>
+
+<p class="paper"><b>JiT（Back to Basics）</b>（<a href="https://arxiv.org/abs/2511.13720">2511.13720</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; x-pred + v-loss</code><br>
+<span class="idea"><span class="p">问题</span> 高维像素空间预测噪声/速度会崩；<span class="p">方法</span> 让网络直接预测干净图 x（x-pred），损失用 v-loss（把 x̂ 换算成 v̂=(x̂−z_t)/(1−t) 再回归）；<span class="p">核心</span> 干净图在低维流形、噪声图在高维全空间，所以 x-pred 让普通 ViT + 大 patch 训得动——整波的关键开关。</span></p>
+
+<p class="paper"><b>EPG（There is No VAE）</b>（<a href="https://arxiv.org/abs/2510.12586">2510.12586</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; x-pred + consistency-loss（自监督预训练）</code><br>
+<span class="idea"><span class="p">问题</span> 没 VAE 就学不出好表示；<span class="p">方法</span> 先自监督预训练学语义，再端到端训一致性模型；<span class="p">核心</span> 用 SSL 的「两阶段」替代 VAE 的「压缩」。</span></p>
+
+<p class="paper"><b>pMF（Pixel Mean Flow）</b>（<a href="https://arxiv.org/abs/2601.22158">2601.22158</a>）<br>
+<code class="recipe">meanflow(patch + noise) -&gt; x-pred + v-loss（+ 感知损失）</code><br>
+<span class="idea"><span class="p">问题</span> 一步 + 无潜空间难做好；<span class="p">方法</span> 把 JiT 的 x-pred 与 MeanFlow 的一步结合，再叠加感知损失；<span class="p">核心</span> 一步无潜空间生成（256² 2.22 FID）。</span></p>
+
+<p class="paper"><b>CrossFlow</b>（<a href="https://arxiv.org/abs/2606.19970">2606.19970</a>）<br>
+<code class="recipe">flow(patch ⊕ vae(patch) + noise) -&gt; consistency + consistency-loss</code><br>
+<span class="idea"><span class="p">问题</span> 一步生成只限于单一空间；<span class="p">方法</span> 跨潜/像素空间的一致性约束；<span class="p">核心</span> 一步生成同时贯通两个空间。</span></p>
+
+<p class="paper"><b>One Step Diffusion via Shortcut Models</b>（<a href="https://arxiv.org/abs/2410.12557">2410.12557</a>）<br>
+<code class="recipe">flow(A + noise) -&gt; x-pred + shortcut-loss（自洽一步）</code><br>
+<span class="idea"><span class="p">问题</span> 一步生成通常要蒸馏、多阶段；<span class="p">方法</span> 单网络单阶段学「任意时刻直接跳干净图」的 shortcut；<span class="p">核心</span> 一步生成无需蒸馏，MeanFlow/pMF 一步线的平行工作。</span></p>
+
+<h3>2.4 pDiT 架构主线（2025-11 ~ 2026-07）</h3>
+<p class="trend">JiT 之后，大家开始为像素空间专门设计架构。核心矛盾是 granularity dilemma——一个 patch 粒度很难同时顾好全局布局和局部纹理，于是出现双层、U 形、超连接、语义锚点等各路解法。</p>
+
+<p class="paper"><b>PixelDiT（NVIDIA, CVPR 2026 Best Paper Finalist）</b>（<a href="https://arxiv.org/abs/2511.20645">2511.20645</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（双层：patch DiT + pixel DiT）</code><br>
+<span class="idea"><span class="p">问题</span> 单 patch 粒度难兼顾全局布局与局部纹理；<span class="p">方法</span> 双层（大 patch DiT 管布局 + 小 patch DiT 补纹理）；<span class="p">核心</span> 无 VAE 端到端做到 1024² 文生图。</span></p>
+
+<p class="paper"><b>MiniT2I（何恺明团队，2026-06，MM-JiT）</b>（<a href="https://peppaking8.github.io/#/post/minit2i">博客</a> / <a href="https://github.com/PeppaKing8/minit2i-jax">代码</a>）<br>
+<code class="recipe">flow(patch + text) -&gt; x-pred + v-loss（MM-JiT = JiT + 轻量文本适配器）</code><br>
+<span class="idea"><span class="p">问题</span> 主流文生图依赖大模型 + 一堆复杂组件；<span class="p">方法</span> 把 JiT 的极简主义搬到文生图，只加轻量文本适配器；<span class="p">核心</span> 无 VAE/AdaLN/辅助损失/私有数据，258M 参数做到 0.87 GenEval。</span></p>
+
+<p class="paper"><b>PRXPixel（Photoroom）</b>（<a href="https://huggingface.co/Photoroom/prxpixel-t2i">HF</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（Qwen3-VL 文本编码，~7B）</code><br>
+<span class="idea"><span class="p">问题</span> 缺开源无 VAE 文生图；<span class="p">方法</span> 直接对 RGB 去噪 + Qwen3-VL 文本编码；<span class="p">核心</span> 开源像素空间文生图。</span></p>
+
+<p class="paper"><b>DiP（Taming Diffusion in Pixel Space）</b>（<a href="https://arxiv.org/abs/2511.18822">2511.18822</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（全局 DiT + 轻量 detail 头）</code><br>
+<span class="idea"><span class="p">问题</span> 像素空间「质量 vs 算力」的权衡；<span class="p">方法</span> 拆成「全局结构 + 局部细节」两步；<span class="p">核心</span> 大 patch 管全局、轻量头补局部。</span></p>
+
+<p class="paper"><b>PixelGen</b>（<a href="https://arxiv.org/abs/2602.02493">2602.02493</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss + 感知损失(LPIPS/DINO)</code><br>
+<span class="idea"><span class="p">问题</span> 像素扩散主观质量不如潜空间；<span class="p">方法</span> 加感知损失（LPIPS 管局部纹理 + DINO 管全局语义）；<span class="p">核心</span> 像素扩散反超潜空间。</span></p>
+
+<p class="paper"><b>HyperDiT</b>（<a href="https://arxiv.org/abs/2605.15741">2605.15741</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（跨尺度超连接 + register）</code><br>
+<span class="idea"><span class="p">问题</span> granularity dilemma（一个粒度难兼顾全局/局部）；<span class="p">方法</span> 跨尺度超连接 + 用 register 接 VFM 语义；<span class="p">核心</span> 借语义引导细粒度生成。</span></p>
+
+<p class="paper"><b>AsymFlow</b>（<a href="https://arxiv.org/abs/2605.12964">2605.12964</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred（rank-asymmetric：噪声低秩 + 数据全维）</code><br>
+<span class="idea"><span class="p">问题</span> 像素空间 flow 难训、且想把 latent 模型变像素模型；<span class="p">方法</span> rank-asymmetric：噪声预测限在低秩子空间、数据预测保持全维，并把低秩像素子空间对齐到 latent 空间来微调；<span class="p">核心</span> 噪声低秩、数据全维的不对称参数化，256² 1.57 FID。</span></p>
+
+<p class="paper"><b>PixelU</b>（<a href="https://arxiv.org/abs/2606.27760">2606.27760</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（U 形 Transformer）</code><br>
+<span class="idea"><span class="p">问题</span> 低频语义与高频信号难在一个网络里同时建模；<span class="p">方法</span> U 形分层结构；<span class="p">核心</span> 256² 达 1.63 FID。</span></p>
+
+<p class="paper"><b>AnchorDiT</b>（<a href="https://hub-assets-cache.baai.ac.cn/view/56890">解读</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（语义锚点引导）</code><br>
+<span class="idea"><span class="p">问题</span> 单 patch 粒度难兼顾全局语义与局部细节（granularity dilemma）；<span class="p">方法</span> 大尺度分支提炼多层语义锚点、小尺度分支保留细节，Anchor Connector 做几何对齐让细粒度 token 持续查询稠密语义；<span class="p">核心</span> 跨尺度语义锚点引导。</span></p>
+
+<h3>2.5 频率分支（2025-11 ~ 2026-08）</h3>
+<p class="trend">像素空间最大的痛点是高频细节容易丢。一条支线把「低频语义」和「高频纹理」显式拆开，各交给不同模块 / 路径处理。</p>
+
+<p class="paper"><b>DeCo</b>（<a href="https://arxiv.org/abs/2511.19365">2511.19365</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + 频率感知 FM-loss（低频 DiT + 高频解码器）</code><br>
+<span class="idea"><span class="p">问题</span> 像素扩散丢高频细节；<span class="p">方法</span> 低频语义交给 DiT、高频细节交给轻量解码器；<span class="p">核心</span> 各管各的频段。</span></p>
+
+<p class="paper"><b>FrequencyBooster</b>（<a href="https://arxiv.org/abs/2605.17759">2605.17759</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（全频段建模）</code><br>
+<span class="idea"><span class="p">问题</span> 像素扩散高频细节不保真；<span class="p">方法</span> DiT 主干 + 大容量 FB-Decoder 专门提取高频细节与低频语义，再 Fusion 融合；<span class="p">核心</span> 高频解码器与低频语义分离建模。</span></p>
+
+<p class="paper"><b>Spectral Forcing</b>（<a href="https://arxiv.org/abs/2606.15236">2606.15236</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（DCT 低通掩码）</code><br>
+<span class="idea"><span class="p">问题</span> 去噪器在高频噪声上浪费容量；<span class="p">方法</span> 输入前用 DCT 低通掩码「给去噪器看信号、藏噪声」；<span class="p">核心</span> 参数免费还更省容量。</span></p>
+
+<p class="paper"><b>FREPix</b>（<a href="https://arxiv.org/abs/2605.06421">2605.06421</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; 低频/高频分路径 + 频率感知 loss</code><br>
+<span class="idea"><span class="p">问题</span> 一个 flow 难同时搬低频与高频；<span class="p">方法</span> 显式拆成低、高频两条 transport path；<span class="p">核心</span> 频率异构的 flow matching。</span></p>
+
+<p class="paper"><b>Energy-Guided Flow Matching</b>（<a href="https://arxiv.org/abs/2608.05811">2608.05811</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + 能量引导 loss</code><br>
+<span class="idea"><span class="p">问题</span> 固定终点的 flow 不够灵活；<span class="p">方法</span> 按每张图的频谱能量逐步释放频率信息；<span class="p">核心</span> 终点自适应，0.85 GenEval。</span></p>
+
+<p class="paper"><b>RaPD（Resolution-Agnostic Pixel Diffusion）</b>（<a href="https://arxiv.org/abs/2605.15908">2605.15908</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（语义增强的隐式表示）</code><br>
+<span class="idea"><span class="p">问题</span> 像素扩散绑定固定分辨率；<span class="p">方法</span> 用语义增强的隐式神经场（INR）表示像素；<span class="p">核心</span> 分辨率无关生成。</span></p>
+
+<h3>2.6 训练技巧与机理</h3>
+<p class="trend">除了改架构，还有人从训练本身下手：表示对齐、register、自引导、缩放律，各自补一个像素扩散的短板。</p>
+
+<p class="paper"><b>PixelREPA（KAIST）</b>（<a href="https://arxiv.org/abs/2603.14366">2603.14366</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; x-pred + v-loss + PixelREPA 对齐</code><br>
+<span class="idea"><span class="p">问题</span> REPA 表示对齐在像素 DiT 上失效；<span class="p">方法</span> 修正信息不对称的对齐；<span class="p">核心</span> 修好像素空间里的表示对齐。</span></p>
+
+<p class="paper"><b>Registers Matter for pDiT</b>（<a href="https://arxiv.org/abs/2605.16147">2605.16147</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss + Register Guidance</code><br>
+<span class="idea"><span class="p">问题</span> DiT 里高范数 token 的作用不清；<span class="p">方法</span> 证明这些高范数 token 就是 register，对像素 DiT 生成质量关键，提出 Register Guidance；<span class="p">核心</span> register 是像素 DiT 的隐性语义载体。</span></p>
+
+<p class="paper"><b>A Frozen Pixel-Space Diffusion Model Can Guide Itself</b>（<a href="https://arxiv.org/abs/2607.29122">2607.29122</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（冻结自引导）</code><br>
+<span class="idea"><span class="p">问题</span> 提升质量通常要重训；<span class="p">方法</span> 冻结模型用自己生成的样本自引导；<span class="p">核心</span> 无需重新训练。</span></p>
+
+<p class="paper"><b>Abra（Scaling Diffusion Image Training）</b>（<a href="https://arxiv.org/abs/2608.17286">2608.17286</a>）<br>
+<code class="recipe">flow(...) -&gt; v-pred + v-loss（缩放律）</code><br>
+<span class="idea"><span class="p">问题</span> 视觉生成缺 compute-optimal scaling law；<span class="p">方法</span> 跨三个数量级算力拟合缩放律；<span class="p">核心</span> ~200 image tokens/参数（Chinchilla 10 倍），应多喂数据少堆模型。</span></p>
+
+<p class="paper"><b>REPA（Representation Alignment for Generation）</b>（<a href="https://arxiv.org/abs/2410.06940">2410.06940</a>）<br>
+<code class="recipe">flow(A + noise) -&gt; v-pred + 表示对齐 loss（对齐 DINO 表示）</code><br>
+<span class="idea"><span class="p">问题</span> DiT 训练难、收敛慢；<span class="p">方法</span> 把去噪中间表示对齐到预训练视觉编码器（DINO）的表示；<span class="p">核心</span> 表示对齐让 DiT 训练快 17.5×、质量更好——PixelREPA 的源头。</span></p>
+
+<h3>2.7 像素解码器（VAE 降级 / 删除）</h3>
+<p class="trend">一条更保守的路线：不删整个 VAE，只把最后「latent → 像素」的解码器换成像素扩散，既保留 latent 的高效又补回细节。</p>
+
+<p class="paper"><b>PiD（NVIDIA, Pixel Diffusion Decoder）</b>（<a href="https://arxiv.org/abs/2605.23902">2605.23902</a>）<br>
+<code class="recipe">flow(vae(patch) + noise) -&gt; v-pred + v-loss（latent → 像素解码）</code><br>
+<span class="idea"><span class="p">问题</span> VAE 解码器高分辨率吃内存、丢细节；<span class="p">方法</span> 把 latent→像素解码也换成条件像素扩散；<span class="p">核心</span> 统一解码+超分、支持 4K（保守派：保留 latent）。</span></p>
+
+<p class="paper"><b>L2P（Unlocking Latent Potential for Pixel Generation）</b>（<a href="https://arxiv.org/abs/2605.12013">2605.12013</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（冻结 LDM 中间层、只训浅层）</code><br>
+<span class="idea"><span class="p">问题</span> VAE 是像素生成的内存/质量瓶颈；<span class="p">方法</span> 删掉 VAE，冻结已训 latent 模型中间层、只训浅层做 latent→像素；<span class="p">核心</span> 解锁原生 4K/8K（激进派）。</span></p>
+
+<p class="paper"><b>LTX-2.5（Lightricks）</b>（<a href="https://dev.to/prabhakar_chaudhary_7afe4/ltx-25-how-a-diffusion-based-video-decoder-changes-the-open-weights-video-generation-stack-4808">dev.to</a>）<br>
+<code class="recipe">flow(vae(patch) + noise) -&gt; v-pred + 像素空间 loss（视频解码）</code><br>
+<span class="idea"><span class="p">问题</span> 视频 latent 解码丢细节；<span class="p">方法</span> 视频解码器也做成扩散、用像素空间损失；<span class="p">核心</span> 补回 latent 丢的细节。</span></p>
+
+<p class="paper"><b>RAE（Diffusion Transformers with Representation Autoencoders）</b>（<a href="https://arxiv.org/abs/2510.11690">2510.11690</a>）<br>
+<code class="recipe">flow(rae(patch) + noise) -&gt; v-pred + 重建 loss（表示自编码器）</code><br>
+<span class="idea"><span class="p">问题</span> VAE 是否不可替代；<span class="p">方法</span> 用冻结的表示编码器（DINO 等）+ 训 decoder 组成 RAE 替代 VAE；<span class="p">核心</span> 表示自编码器比 VAE 更简更强，是本综述「去 VAE」的中坚。</span></p>
+
+<p class="paper"><b>Latent Diffusion Model without VAE</b>（<a href="https://arxiv.org/abs/2510.15301">2510.15301</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + 自监督（无 VAE latent）</code><br>
+<span class="idea"><span class="p">问题</span> VAE 是有损瓶颈；<span class="p">方法</span> 直接在像素空间做 latent diffusion、用自监督替代 VAE；<span class="p">核心</span> 「latent 但无 VAE」的中间路线，衔接 EPG/Tuna-R。</span></p>
+
+<p class="paper"><b>MAETok（Masked Autoencoders Are Effective Tokenizers）</b>（<a href="https://arxiv.org/abs/2502.03444">2502.03444</a>）<br>
+<code class="recipe">masked-ae(patch) -&gt; 重建 + 扩散（MAE tokenizer）</code><br>
+<span class="idea"><span class="p">问题</span> VAE 潜空间结构差、影响扩散质量；<span class="p">方法</span> 用掩码自编码器（MAE）学语义更丰富的潜空间；<span class="p">核心</span> MAE tokenizer 提升扩散质量与训练速度。</span></p>
+
+<h3>2.8 自回归（AR）路线：离散 token → 连续 token → 像素 token</h3>
+<p class="trend">与扩散并行的是自回归（像 LLM 一样逐 token 生成）。早期用离散 token（VQ），后来连续 token、再到与扩散合流，两条路线在「像素 token」上汇合。</p>
+<p class="paper"><b>VQGAN（Taming Transformers）</b>（<a href="https://arxiv.org/abs/2012.09841">2012.09841</a>）<br>
+<code class="recipe">ar(vq(patch)) -&gt; next-token-loss（VQ 离散化）</code><br>
+<span class="idea"><span class="p">问题</span> 图像生成缺好用的离散 token；<span class="p">方法</span> VQ-VAE 学离散 codebook + transformer 建模；<span class="p">核心</span> 离散视觉 token 的源头，LlamaGen/VAR 的底座。</span></p>
+
+<p class="paper"><b>LlamaGen</b>（<a href="https://arxiv.org/abs/2406.06525">2406.06525</a>）<br>
+<code class="recipe">ar(vq(patch)) -&gt; next-token-loss</code><br>
+<span class="idea"><span class="p">问题</span> AR 路线能不能做出 SOTA 图像生成（当时被扩散压着）；<span class="p">方法</span> 把 LLM 的 vanilla next-token prediction 直接搬到 VQ token 上；<span class="p">核心</span> 证明「普通 AR 也能打」，拉开视觉 AR 的序幕。</span></p>
+<p class="paper"><b>VAR</b>（<a href="https://arxiv.org/abs/2404.02905">2404.02905</a>）<br>
+<code class="recipe">ar(vq 多尺度) -&gt; next-scale-loss</code><br>
+<span class="idea"><span class="p">问题</span> 逐 token（光栅序）生成又慢又违反图像的层级结构；<span class="p">方法</span> 多尺度 VQ + 从粗到细逐尺度预测；<span class="p">核心</span> next-scale 取代 next-token。</span></p>
+<p class="paper"><b>MAR</b>（<a href="https://arxiv.org/abs/2406.11838">2406.11838</a>）<br>
+<code class="recipe">ar(mask patch) -&gt; diffusion-loss</code><br>
+<span class="idea"><span class="p">问题</span> VQ 离散化有量化损失、表达受限；<span class="p">方法</span> 丢掉 VQ，用掩码自回归 + 扩散损失建模连续 token；<span class="p">核心</span> AR 不一定要离散 token。</span></p>
+<p class="paper"><b>Fluid</b>（<a href="https://arxiv.org/abs/2410.13892">2410.13892</a>）<br>
+<code class="recipe">ar(patch 连续 token) -&gt; flow-loss（随机序）</code><br>
+<span class="idea"><span class="p">问题</span> 离散 token + 光栅序不是最优；<span class="p">方法</span> 连续 token + 随机序自回归；<span class="p">核心</span> 连续 + 随机序比离散 + 光栅序更好。</span></p>
+<p class="paper"><b>LongCat-Next</b>（<a href="https://arxiv.org/abs/2603.27538">2603.27538</a>）<br>
+<code class="recipe">ar(discrete text+image+audio) -&gt; next-token-loss [dNaViT]</code><br>
+<span class="idea"><span class="p">问题</span> 各模态各自一套 tokenizer / model；<span class="p">方法</span> 把所有模态词元化成同一离散 token 空间，纯 NTP 一个模型搞定；<span class="p">核心</span> 离散原生多模态（MoE A3B、2T tokens）。</span></p>
+
+<p class="paper"><b>Farmer</b>（<a href="https://arxiv.org/abs/2510.23588">2510.23588</a>）<br>
+<code class="recipe">ar(patch) -&gt; 连续 token + flow-loss</code><br>
+<span class="idea"><span class="p">问题</span> 离散 token 有量化损失；<span class="p">方法</span> 像素上用 flow 自回归连续 token；<span class="p">核心</span> 无量化损失的像素自回归。</span></p>
+
+<p class="paper"><b>Fractal Generative Models</b>（<a href="https://arxiv.org/abs/2502.17437">2502.17437</a>）<br>
+<code class="recipe">ar(patch 多粒度) -&gt; 分形 next-token-loss</code><br>
+<span class="idea"><span class="p">问题</span> AR 逐像素/逐 token 低效、生成慢；<span class="p">方法</span> 用「分形」把生成模块化成多粒度自回归、可并行动态规划；<span class="p">核心</span> 像素级自回归的分形扩展（何恺明组）。</span></p>
+
+<p class="paper"><b>D-AR（Diffusion via Autoregressive）</b>（<a href="https://iclr.cc/virtual/2026/poster/10010275">ICLR 2026</a>）<br>
+<code class="recipe">ar(扩散 token) -&gt; next-token-loss</code><br>
+<span class="idea"><span class="p">问题</span> 扩散与 AR 是两套范式；<span class="p">方法</span> 把扩散过程重写成标准 next-token 预测；<span class="p">核心</span> 普通 LLM 解码器就能生成图像。</span></p>
+
+<p class="paper"><b>NextStep-1</b>（<a href="https://mlanthology.org/iclr/2026/han2026iclr-nextstep1/">ICLR 2026</a>）<br>
+<code class="recipe">ar(patch 连续 token) -&gt; next-token-loss</code><br>
+<span class="idea"><span class="p">问题</span> 连续 token 自回归难上规模；<span class="p">方法</span> 14B 连续 token 自回归；<span class="p">核心</span> 大规模连续 token 文生图。</span></p>
+
+<p class="paper"><b>PRA（Parallel Rollout Approximation）</b>（<a href="https://arxiv.org/abs/2606.27978">2606.27978</a>）<br>
+<code class="recipe">ar(patch 连续 token) -&gt; next-token-loss + 并行 rollout</code><br>
+<span class="idea"><span class="p">问题</span> 像素自回归质量差；<span class="p">方法</span> 并行 rollout 近似；<span class="p">核心</span> 提升像素自回归质量。</span></p>
+
+<p class="paper"><b>MAR-GRPO</b>（<a href="https://arxiv.org/abs/2604.06966">2604.06966</a>）<br>
+<code class="recipe">ar(mask patch) -&gt; 扩散头 + GRPO</code><br>
+<span class="idea"><span class="p">问题</span> 掩码自回归 + 扩散头训练不稳定；<span class="p">方法</span> 用 GRPO 稳定化；<span class="p">核心</span> 解决扩散头的噪声梯度。</span></p>
+
+<p class="paper"><b>NextFlow</b>（<a href="https://arxiv.org/abs/2601.02204">2601.02204</a>）<br>
+<code class="recipe">transformer_shared (codebook_sem + codebook_pix) -&gt; next-token-loss</code><br>
+<span class="idea"><span class="p">问题</span> 语义与像素难统一建模；<span class="p">方法</span> 双 codebook 解耦语义与像素；<span class="p">核心</span> 6T 图文 token 统一自回归。</span></p>
+
+<h3>2.9 统一多模态 / 视觉基础模型（看哪些 share、哪些独立）</h3>
+<p class="trend">终极目标是把「理解」和「生成」塞进同一个 Transformer，像素 token 是两者共享的桥梁——这也是像素空间相对潜空间的长期优势。</p>
+<p class="paper"><b>Tuna</b>（<a href="https://github.com/facebookresearch/tuna-2">Meta, 2025</a>）<br>
+<code class="recipe">ar(text) + flow(vae(patch)) -&gt; next-token + v-loss [VAE + SigLIP]</code><br>
+<span class="idea"><span class="p">问题</span> 理解与生成割裂；<span class="p">方法</span> 一个模型里 AR 生成文本、flow 生成图像 / 视频，共享统一表示；<span class="p">核心</span> 统一多模态（但还依赖 VAE + SigLIP 编码器）。</span></p>
+<p class="paper"><b>Tuna-R</b>（<a href="https://github.com/facebookresearch/tuna-2">Meta, 2026</a>）<br>
+<code class="recipe">ar(text) + flow(patch) -&gt; next-token + v-loss [rep-enc]</code><br>
+<span class="idea"><span class="p">问题</span> VAE 是多余瓶颈；<span class="p">方法</span> 去掉 VAE，只保留 representation encoder；<span class="p">核心</span> 像素空间统一多模态的第一步。</span></p>
+<p class="paper"><b>Tuna-2</b>（<a href="https://arxiv.org/abs/2604.24763">2604.24763</a>）<br>
+<code class="recipe">ar(text) + flow(patch) -&gt; next-token + v-loss [pixel embedding]</code><br>
+<span class="idea"><span class="p">问题</span> VAE 和视觉编码器都多余；<span class="p">方法</span> 连 representation encoder 也去掉，直接用 patch embedding（像素 embedding）；<span class="p">核心</span> 像素 embedding 打败视觉编码器，端到端像素空间统一。</span></p>
+
+<p class="paper"><b>Transfusion（源头，2024）</b>（<a href="https://arxiv.org/abs/2408.11039">2408.11039</a>）<br>
+<code class="recipe">transformer_shared (head_lm + head_diffuse)</code><br>
+<span class="idea"><span class="p">问题</span> 文本与图像用两套模型；<span class="p">方法</span> 一个 Transformer 用 next-token + diffusion 两个目标；<span class="p">核心</span> 统一多模态的源头（潜空间）。</span></p>
+
+<p class="paper"><b>Show-o / Show-o2（源头，2024–25）</b>（<a href="https://arxiv.org/abs/2506.15564">2506.15564</a>）<br>
+<code class="recipe">transformer_shared (ar_text + diffuse_img) -&gt; next-token + diffusion-loss</code><br>
+<span class="idea"><span class="p">问题</span> 生成与理解难统一；<span class="p">方法</span> 离散视觉 token + 扩散解码结合；<span class="p">核心</span> 早期统一多模态（离散 token/潜空间，非像素）。</span></p>
+
+<p class="paper"><b>HiDream-O1-Image</b>（<a href="https://arxiv.org/abs/2605.11061">2605.11061</a>）<br>
+<code class="recipe">transformer_shared (text + pixel) -&gt; x-pred + v-loss [UiT]</code><br>
+<span class="idea"><span class="p">问题</span> 生成与理解各用一套；<span class="p">方法</span> 像素和文本放进同一个 Transformer；<span class="p">核心</span> 8B 模型压过 56B FLUX.2。</span></p>
+
+<p class="paper"><b>UniFlow</b>（<a href="https://mlanthology.org/iclr/2026/yue2026iclr-uniflow/">ICLR 2026</a>）<br>
+<code class="recipe">encoder_shared + decoder_recon</code><br>
+<span class="idea"><span class="p">问题</span> 理解与生成用不同 tokenizer；<span class="p">方法</span> 给任意视觉编码器加一个简洁重建解码器，改造成统一像素 flow tokenizer；<span class="p">核心</span> 不改编码器也能统一理解与生成。</span></p>
+
+<p class="paper"><b>Rosetta Stone</b>（<a href="https://www.openaccess.thecvf.com/content/CVPR2026/html/Sun_Rosetta_Stone_For_Unified_MLLMs_A_Unified_Tokenizer_to_Decipher_CVPR_2026_paper.html">CVPR 2026</a>）<br>
+<code class="recipe">tokenizer_shared (und + gen)</code><br>
+<span class="idea"><span class="p">问题</span> 统一 tokenizer 的重建（生成）与语义（理解）任务互相打架；<span class="p">方法</span> 单编码器层级解耦——浅层做像素重建、深层做语义对齐，外加 CLIP/DINOv2/SAM 多基础模型监督 + 注意力优先的双 codebook；<span class="p">核心</span> 重建与语义在同一编码器里分层共存。</span></p>
+
+<p class="paper"><b>Representation Forcing</b>（<a href="https://arxiv.org/abs/2605.31604">2605.31604</a>）<br>
+<code class="recipe">transformer_shared (enc_und + dec_gen) -&gt; 表示对齐 + 渲染 loss</code><br>
+<span class="idea"><span class="p">问题</span> 多模态靠外部编码器有瓶颈；<span class="p">方法</span> 理解端把图编码成表示，生成端先从文本预测同一表示再渲染成像素，用表示对齐强制两端一致；<span class="p">核心</span> 先预测表示、再渲染像素，无外部编码器。</span></p>
+
+<p class="paper"><b>MANZANO</b>（<a href="https://mlanthology.org/iclr/2026/li2026iclr-manzano/">ICLR 2026</a>）<br>
+<code class="recipe">encoder_shared + adapter_und + adapter_gen</code><br>
+<span class="idea"><span class="p">问题</span> 理解要连续、生成要离散，难兼得；<span class="p">方法</span> 共享编码器 + 两个轻量适配器；<span class="p">核心</span> 同一语义空间里兼顾两者。</span></p>
+
+<p class="paper"><b>NEO-unify</b>（<a href="https://47.101.142.174/en/news-detail/51170542">介绍</a>）<br>
+<code class="recipe">transformer (moe_und + moe_gen)</code><br>
+<span class="idea"><span class="p">问题</span> 多模态还是拼凑的；<span class="p">方法</span> 文字用 AR、像素用 flow matching 原生端到端；<span class="p">核心</span> 原生多模态。</span></p>
+
+<p class="paper"><b>JetFormer（Autoregressive Model of Raw Images and Text）</b>（<a href="https://arxiv.org/abs/2411.19722">2411.19722</a>）<br>
+<code class="recipe">ar(text + raw patch) + flow -&gt; next-token + flow-loss</code><br>
+<span class="idea"><span class="p">问题</span> 多模态靠一堆独立组件拼装；<span class="p">方法</span> 一个 decoder-only transformer + normalizing flow 直接建模原始像素与文本；<span class="p">核心</span> 原始像素与文本的端到端统一自回归。</span></p>
+
+<h3>2.10 应用扩展（3D / 几何 / 医疗 / 视频）</h3>
+<p class="trend">像素扩散的高保真特性，在 3D、几何、医疗这类「每个像素 / 体素都重要」的场景最有价值。</p>
+
+<p class="paper"><b>PointDiT</b>（<a href="https://arxiv.org/abs/2607.02515">2607.02515</a>）<br>
+<code class="recipe">flow(point-map patch + noise) -&gt; x-pred + v-loss（DINOv3 条件）</code><br>
+<span class="idea"><span class="p">问题</span> 单图 3D 重建常用复杂混合架构；<span class="p">方法</span> 极简 ViT 直接在 3D point map patch 上扩散，DINOv3 图像 token 做条件，x-prediction 预测干净点图；<span class="p">核心</span> 像素空间扩散做几何，简单且对模糊区鲁棒。</span></p>
+
+<p class="paper"><b>PixGS</b>（<a href="https://www.semanticscholar.org/paper/fefe5ccb33c99b1f6ad00c9dd5851869798be4cb">Semantic Scholar</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（→ 3D Gaussian Splat）</code><br>
+<span class="idea"><span class="p">问题</span> 3D 生成靠 latent 有多阶段误差；<span class="p">方法</span> 像素扩散直接生成 3D 高斯；<span class="p">核心</span> 绕过有损 latent。</span></p>
+
+<p class="paper"><b>PixWorld</b>（<a href="https://arxiv.org/abs/2607.05373">2607.05373</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（→ 3DGS 重建+生成）</code><br>
+<span class="idea"><span class="p">问题</span> 3D 重建与生成是两套范式；<span class="p">方法</span> 多视图拆成 clean/noisy——clean 驱动重建、noisy 被生成，都经多视图可微渲染监督 pixel-aligned 3D Gaussian；<span class="p">核心</span> 一个模型统一重建+生成，无 VAE/RAE。</span></p>
+
+<p class="paper"><b>Rays as Pixels</b>（<a href="https://arxiv.org/abs/2604.09429">2604.09429</a>）<br>
+<code class="recipe">flow(vae(patch) + noise) -&gt; v-pred + v-loss（→ 视频+相机轨迹）</code><br>
+<span class="idea"><span class="p">问题</span> 视频与相机轨迹分开建模；<span class="p">方法</span> 把相机光线打包进 3 通道「raxel」；<span class="p">核心</span> 视频 VAE 直接当相机编码器。</span></p>
+
+<p class="paper"><b>PixTex</b>（<a href="https://dl.acm.org/doi/full/10.1145/3799902.3811120">DOI</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（→ 3D 纹理）</code><br>
+<span class="idea"><span class="p">问题</span> latent 压缩损害细节、破坏多视图一致性；<span class="p">方法</span> 像素空间多视图 inpainting 扩散 + 粗到细，联合补不可见区域；<span class="p">核心</span> 无损耗几何引导 + 像素级多视图一致。</span></p>
+
+<p class="paper"><b>MedSyn</b>（见 <a href="https://arxiv.org/abs/2607.17585">综述</a>）<br>
+<code class="recipe">diffuse(patch + noise) -&gt; ε-pred + ε-loss（→ 3D CT）</code><br>
+<span class="idea"><span class="p">问题</span> 医疗体数据生成保真难；<span class="p">方法</span> 文字（临床报告）引导 + 解剖感知；<span class="p">核心</span> 高保真 3D 肺部 CT 生成（医疗应用早期代表）。</span></p>
+
+<p class="paper"><b>Beyond Pixels</b>（<a href="https://arxiv.org/abs/2608.10744">2608.10744</a>）<br>
+<code class="recipe">flow(vae(patch) + noise) -&gt; v-pred + v-loss（→ 4D 世界）</code><br>
+<span class="idea"><span class="p">问题</span> 视频模型学到的空间线索没被利用；<span class="p">方法</span> 从视频 latent 直接生成动态 4D 世界，仅 1K 条数据打通统一接口；<span class="p">核心</span> 视频→4D 的统一接口。</span></p>
+
+<h2>3. 共识与分歧（速记版）</h2>
+<p><b>共识：</b></p>
+<ol>
+<li>x-prediction 是像素空间高维训练的关键（JiT/pMF 后成为共识，并有维度理论背书）。</li>
+<li>VAE 不免费：有损、非端到端、高分辨率吃内存，去掉或降级有真实收益。</li>
+<li>感知损失 / 频率解耦是大杠杆。</li>
+<li>全局-局部分解架构（大 patch 管布局 + 小 patch 补细节）是标配。</li>
+<li>像素 token 是统一多模态的方向。</li>
+</ol>
+<p><b>分歧 / 难点：</b></p>
+<ol>
+<li>删 VAE（PixelDiT/pMF/HiDream）vs 保 latent（PiD/LTX-2.5）——激进派 vs 保守派。</li>
+<li>granularity dilemma：低频语义与高频纹理在高维里互相拉扯，尚未统一解决。</li>
+<li>高分辨率算力：端到端 4K 仍贵。</li>
+<li>架构未收敛：U 形/双层/超连接/频率解耦并存，FID 差距极小。</li>
+<li>扩散 vs 自回归在像素 token 上的终局未定。</li>
+</ol>
+
+<hr>
+<p class="note">说明：本综述经交叉引用各论文参考文献列表补齐了 flow/扩散地基（score SDE、flow matching、rectified flow、stochastic interpolants、EDM、consistency、SiT、Imagen、SD3、VQGAN）与若干被引但遗漏的工作（REPA、RAE、LDM-without-VAE、MAETok、shortcut models、Fractal、JetFormer）。MedSyn、NEO-unify、LTX-2.5、AnchorDiT 等部分工作仅有综述引用或新闻页，未逐一取得稳定 arXiv 编号，以可访问链接为准。Abra 摘要未明说像素/潜空间，正文需进一步核对，此处按其自述的「text-to-image flow-matching transformers」描述。</p>
+
+</main>
+</body>
+</html>
