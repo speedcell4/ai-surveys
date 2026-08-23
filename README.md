@@ -2,7 +2,8 @@
 
 两份研究速览，每篇论文用「配方（伪代码 + 损失）+ 一句话（问题 / 方法 / 核心）」的形式整理，按主题归类，面向没读过原论文的读者。
 
-- [Pixel Diffusion 速览](pixel-diffusion.html) — 像素空间扩散 / flow，2025-08 ~ 2026-08，84 篇
+- [Pixel Diffusion 速览](pixel-diffusion.html) — 像素空间扩散 / flow，2025-08 ~ 2026-08，72 篇
+- [统一多模态模型速览](unified-multimodal.html) — 理解 + 生成统一模型，Tuna 家族深读，18 篇
 - [Grammar Induction / Unsupervised Parsing 速览](grammar-induction.html) — 无监督句法分析，2010 ~ 2026，81 篇
 
 > 新增论文/续写速览前，先读 [AGENTS.md](AGENTS.md)，里面是这套「配方 + 一句话」格式的完整规范。

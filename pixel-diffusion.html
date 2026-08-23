@@ -358,53 +358,8 @@ li { margin:.3em 0; }
 <code class="recipe">transformer_shared (codebook_sem + codebook_pix) -&gt; next-token-loss</code><br>
 <span class="idea"><span class="p">问题</span> 语义与像素难统一建模；<span class="p">方法</span> 双 codebook 解耦语义与像素；<span class="p">核心</span> 6T 图文 token 统一自回归。</span></p>
 
-<h3>2.9 统一多模态 / 视觉基础模型（看哪些 share、哪些独立）</h3>
-<p class="trend">终极目标是把「理解」和「生成」塞进同一个 Transformer，像素 token 是两者共享的桥梁——这也是像素空间相对潜空间的长期优势。</p>
-<p class="paper"><b>Tuna</b>（<a href="https://github.com/facebookresearch/tuna-2">Meta, 2025</a>）<br>
-<code class="recipe">ar(text) + flow(vae(patch)) -&gt; next-token + v-loss [VAE + SigLIP]</code><br>
-<span class="idea"><span class="p">问题</span> 理解与生成割裂；<span class="p">方法</span> 一个模型里 AR 生成文本、flow 生成图像 / 视频，共享统一表示；<span class="p">核心</span> 统一多模态（但还依赖 VAE + SigLIP 编码器）。</span></p>
-<p class="paper"><b>Tuna-R</b>（<a href="https://github.com/facebookresearch/tuna-2">Meta, 2026</a>）<br>
-<code class="recipe">ar(text) + flow(patch) -&gt; next-token + v-loss [rep-enc]</code><br>
-<span class="idea"><span class="p">问题</span> VAE 是多余瓶颈；<span class="p">方法</span> 去掉 VAE，只保留 representation encoder；<span class="p">核心</span> 像素空间统一多模态的第一步。</span></p>
-<p class="paper"><b>Tuna-2</b>（<a href="https://arxiv.org/abs/2604.24763">2604.24763</a>）<br>
-<code class="recipe">ar(text) + flow(patch) -&gt; next-token + v-loss [pixel embedding]</code><br>
-<span class="idea"><span class="p">问题</span> VAE 和视觉编码器都多余；<span class="p">方法</span> 连 representation encoder 也去掉，直接用 patch embedding（像素 embedding）；<span class="p">核心</span> 像素 embedding 打败视觉编码器，端到端像素空间统一。</span></p>
-
-<p class="paper"><b>Transfusion（源头，2024）</b>（<a href="https://arxiv.org/abs/2408.11039">2408.11039</a>）<br>
-<code class="recipe">transformer_shared (head_lm + head_diffuse)</code><br>
-<span class="idea"><span class="p">问题</span> 文本与图像用两套模型；<span class="p">方法</span> 一个 Transformer 用 next-token + diffusion 两个目标；<span class="p">核心</span> 统一多模态的源头（潜空间）。</span></p>
-
-<p class="paper"><b>Show-o / Show-o2（源头，2024–25）</b>（<a href="https://arxiv.org/abs/2506.15564">2506.15564</a>）<br>
-<code class="recipe">transformer_shared (ar_text + diffuse_img) -&gt; next-token + diffusion-loss</code><br>
-<span class="idea"><span class="p">问题</span> 生成与理解难统一；<span class="p">方法</span> 离散视觉 token + 扩散解码结合；<span class="p">核心</span> 早期统一多模态（离散 token/潜空间，非像素）。</span></p>
-
-<p class="paper"><b>HiDream-O1-Image</b>（<a href="https://arxiv.org/abs/2605.11061">2605.11061</a>）<br>
-<code class="recipe">transformer_shared (text + pixel) -&gt; x-pred + v-loss [UiT]</code><br>
-<span class="idea"><span class="p">问题</span> 生成与理解各用一套；<span class="p">方法</span> 像素和文本放进同一个 Transformer；<span class="p">核心</span> 8B 模型压过 56B FLUX.2。</span></p>
-
-<p class="paper"><b>UniFlow</b>（<a href="https://mlanthology.org/iclr/2026/yue2026iclr-uniflow/">ICLR 2026</a>）<br>
-<code class="recipe">encoder_shared + decoder_recon</code><br>
-<span class="idea"><span class="p">问题</span> 理解与生成用不同 tokenizer；<span class="p">方法</span> 给任意视觉编码器加一个简洁重建解码器，改造成统一像素 flow tokenizer；<span class="p">核心</span> 不改编码器也能统一理解与生成。</span></p>
-
-<p class="paper"><b>Rosetta Stone</b>（<a href="https://www.openaccess.thecvf.com/content/CVPR2026/html/Sun_Rosetta_Stone_For_Unified_MLLMs_A_Unified_Tokenizer_to_Decipher_CVPR_2026_paper.html">CVPR 2026</a>）<br>
-<code class="recipe">tokenizer_shared (und + gen)</code><br>
-<span class="idea"><span class="p">问题</span> 统一 tokenizer 的重建（生成）与语义（理解）任务互相打架；<span class="p">方法</span> 单编码器层级解耦——浅层做像素重建、深层做语义对齐，外加 CLIP/DINOv2/SAM 多基础模型监督 + 注意力优先的双 codebook；<span class="p">核心</span> 重建与语义在同一编码器里分层共存。</span></p>
-
-<p class="paper"><b>Representation Forcing</b>（<a href="https://arxiv.org/abs/2605.31604">2605.31604</a>）<br>
-<code class="recipe">transformer_shared (enc_und + dec_gen) -&gt; 表示对齐 + 渲染 loss</code><br>
-<span class="idea"><span class="p">问题</span> 多模态靠外部编码器有瓶颈；<span class="p">方法</span> 理解端把图编码成表示，生成端先从文本预测同一表示再渲染成像素，用表示对齐强制两端一致；<span class="p">核心</span> 先预测表示、再渲染像素，无外部编码器。</span></p>
-
-<p class="paper"><b>MANZANO</b>（<a href="https://mlanthology.org/iclr/2026/li2026iclr-manzano/">ICLR 2026</a>）<br>
-<code class="recipe">encoder_shared + adapter_und + adapter_gen</code><br>
-<span class="idea"><span class="p">问题</span> 理解要连续、生成要离散，难兼得；<span class="p">方法</span> 共享编码器 + 两个轻量适配器；<span class="p">核心</span> 同一语义空间里兼顾两者。</span></p>
-
-<p class="paper"><b>NEO-unify</b>（<a href="https://47.101.142.174/en/news-detail/51170542">介绍</a>）<br>
-<code class="recipe">transformer (moe_und + moe_gen)</code><br>
-<span class="idea"><span class="p">问题</span> 多模态还是拼凑的；<span class="p">方法</span> 文字用 AR、像素用 flow matching 原生端到端；<span class="p">核心</span> 原生多模态。</span></p>
-
-<p class="paper"><b>JetFormer（Autoregressive Model of Raw Images and Text）</b>（<a href="https://arxiv.org/abs/2411.19722">2411.19722</a>）<br>
-<code class="recipe">ar(text + raw patch) + flow -&gt; next-token + flow-loss</code><br>
-<span class="idea"><span class="p">问题</span> 多模态靠一堆独立组件拼装；<span class="p">方法</span> 一个 decoder-only transformer + normalizing flow 直接建模原始像素与文本；<span class="p">核心</span> 原始像素与文本的端到端统一自回归。</span></p>
+<h3>2.9 统一多模态 / 视觉基础模型</h3>
+<p class="trend">这部分已拆成独立深读：<a href="unified-multimodal.html">统一多模态模型速览</a>。那里逐篇读原文（Tuna 家族的问题/方法/效果 + 引用网络），并改用更适合该领域的配方记法（视觉表示 &times; 目标 &times; 结构）。</p>
 
 <h3>2.10 应用扩展（3D / 几何 / 医疗 / 视频）</h3>
 <p class="trend">像素扩散的高保真特性，在 3D、几何、医疗这类「每个像素 / 体素都重要」的场景最有价值。</p>

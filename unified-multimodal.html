@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>统一多模态模型（Unified Multimodal Models）速览</title>
+<style>
+:root { --accent:#0e7490; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#ecfeff; }
+* { box-sizing: border-box; }
+body { margin:0; background:#fafafa; color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  line-height:1.75; font-size:16px; }
+.container { max-width:940px; margin:0 auto; padding:44px 28px 96px; background:#fff; box-shadow:0 0 0 1px var(--border); min-height:100vh; }
+h1 { font-size:1.75em; line-height:1.35; border-bottom:2px solid var(--accent); padding-bottom:.4em; margin:.1em 0 .2em; }
+.sub { color:var(--muted); margin-top:0; }
+h2 { font-size:1.32em; margin-top:2.2em; border-bottom:1px solid var(--border); padding-bottom:.3em; }
+h3 { font-size:1.1em; margin-top:1.8em; color:#111827; }
+a { color:var(--accent); text-decoration:none; }
+a:hover { text-decoration:underline; }
+table { width:100%; border-collapse:collapse; margin:1.2em 0; font-size:.94em; }
+th,td { border:1px solid var(--border); padding:.5em .75em; text-align:left; vertical-align:top; }
+th { background:#f0fdfa; }
+tr:nth-child(even) td { background:#fafafa; }
+blockquote { border-left:4px solid var(--accent); margin:1.2em 0; padding:.5em 1em; background:var(--bg); color:#374151; border-radius:0 6px 6px 0; }
+.paper { margin:1.25em 0; }
+.paper b { color:#111827; }
+code.recipe { display:inline-block; margin:.4em 0; background:var(--bg); border-left:3px solid var(--accent); padding:.34em .72em; border-radius:5px; font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:.9em; color:#111827; }
+.idea { color:#374151; }
+.idea .p { color:#b91c1c; font-weight:600; }
+.trend { color:#374151; background:#ecfeff; border-left:3px solid #0e7490; padding:.55em .85em; border-radius:5px; margin:.55em 0 1.1em; }
+.deep { background:#f0fdfa; border:1px solid #99f6e4; border-radius:8px; padding:.1em 1em .5em; margin:1em 0; }
+hr { border:none; border-top:1px solid var(--border); margin:2.2em 0; }
+.note { color:var(--muted); font-size:.9em; }
+ol,ul { padding-left:1.5em; }
+li { margin:.35em 0; }
+@media (max-width:640px){ .container{padding:28px 16px 64px;} body{font-size:15px;} }
+</style>
+</head>
+<body>
+<main class="container">
+
+<h1>统一多模态模型速览（Unified Multimodal Models）</h1>
+<p class="sub">覆盖 2022 ~ 2026 · 聚焦「理解 + 生成放进同一个模型」· 检索时间 2026-08-23 · 每篇 = 配方 + 一句话（问题 / 方法 / 效果）</p>
+
+<h2>0. 记法（这个领域的「最大公约数」）</h2>
+<p>统一多模态模型最关键的对比维度不是「预测什么 + 什么损失」（这些模型基本都有 next-token / flow / diffusion 目标），而是三件事：<b>图像怎么进模型、理解/生成各用什么目标、两者共享还是分离</b>。所以配方记法围绕这三个轴：</p>
+<table>
+<tr><th>记号</th><th>意思</th></tr>
+<tr><td><code>vae</code></td><td>VAE 压缩的连续潜空间（生成常用）</td></tr>
+<tr><td><code>rep</code></td><td>表示编码器（SigLIP / CLIP / DINO）的语义表示（理解常用）</td></tr>
+<tr><td><code>vq</code></td><td>离散 codebook token（VQ-VAE）</td></tr>
+<tr><td><code>pixel</code></td><td>原始像素 patch，无编码器（encoder-free）</td></tr>
+<tr><td><code>ar</code></td><td>自回归 next-token（理解基本都用它）</td></tr>
+<tr><td><code>flow</code></td><td>flow matching / rectified flow</td></tr>
+<tr><td><code>diff</code></td><td>去噪扩散（DDPM 式）</td></tr>
+<tr><td><code>1T</code></td><td>单个 Transformer，理解 + 生成共享（native）</td></tr>
+<tr><td><code>dec</code></td><td>双端分离：理解编码器 + 生成编码器各一套</td></tr>
+</table>
+<p>配方格式：<code>模型: &lt;视觉表示&gt; -&gt; &lt;理解目标&gt; / &lt;生成目标&gt; [结构]</code>。例：<code>Tuna-2: pixel -&gt; ar / flow [1T，无编码器]</code>。</p>
+<blockquote>一句话总结固定三段：<b>问题 → 方法 → 效果</b>，其中「效果」要落到具体 benchmark（GenEval、DPG-Bench、MMMU、GQA 等），不是「效果很好」这种空话。</blockquote>
+
+<h2>1. 主线：三个轴在收敛</h2>
+<ol>
+<li><b>视觉表示</b>：VAE 潜空间 → 表示编码器（SigLIP/CLIP）→ 离散 VQ token → 原始像素 patch。方向是「把编码器一层层拆掉」。</li>
+<li><b>结构</b>：双端分离（理解/生成各一套编码器，Janus）→ 单 Transformer 原生统一（Transfusion / Show-o / Emu3 / Tuna）。</li>
+<li><b>目标</b>：理解用 next-token（AR），生成从离散 AR（Emu3）与连续 flow/diffusion（Transfusion/Tuna）两条路往「像素空间 flow」汇合。</li>
+</ol>
+<p>三条轴的终点是同一个结论（Tuna-2 证明）：<b>预训练视觉编码器不是必需的，端到端像素空间学习也能同时做好理解与生成</b>。</p>
+
+<h2>2. Tuna 家族深度（读原文：问题 / 方法 / 效果）</h2>
+<p class="trend">Meta 的 Tuna 系列是一条清晰的「拆编码器」演化线：Tuna 用「VAE + 表示编码器」级联做统一视觉表示 → Tuna-R 删掉 VAE、只留表示编码器、生成走像素空间 flow → Tuna-2 连表示编码器也删掉、只用 patch embedding。每一步都更简单，但效果不降反升。</p>
+
+<div class="deep">
+<p class="paper"><b>Tuna：Taming Unified Visual Representations</b>（<a href="https://arxiv.org/abs/2512.02014">2512.02014</a>）<br>
+<code class="recipe">Tuna: vae + rep(siglip) -&gt; ar / flow [1T]</code><br>
+<span class="idea"><span class="p">问题</span> 理解与生成各自一套编码器，视觉表示格式不匹配、难端到端；<span class="p">方法</span> 把 VAE 编码器与表示编码器（SigLIP）级联成一个统一的连续视觉表示，图像和视频都在同一空间里做理解 + 生成；<span class="p">效果</span> 图像/视频的理解、生成、编辑都 SOTA，且联合训练让两个任务互相受益而非打架。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>Tuna-R（VAE-free 变体）</b>（见 Tuna-2 论文 §2）<br>
+<code class="recipe">Tuna-R: rep(siglip) -&gt; ar / flow(pixel) [1T]</code><br>
+<span class="idea"><span class="p">问题</span> VAE 是有损、多余的瓶颈；<span class="p">方法</span> 删掉 VAE，保留 SigLIP 表示编码器 + connector，生成改用像素空间 flow matching（x-prediction）；<span class="p">效果</span> 理解与 Tuna 持平、生成反超（GenEval 0.88），证明「像素空间统一表示」可行。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>Tuna-2：Pixel Embeddings Beat Vision Encoders</b>（<a href="https://arxiv.org/abs/2604.24763">2604.24763</a>）<br>
+<code class="recipe">Tuna-2: pixel -&gt; ar / flow(pixel) [1T，无编码器]</code><br>
+<span class="idea"><span class="p">问题</span> 预训练视觉编码器是不是必需的、encoder-free 能不能赢；<span class="p">方法</span> 连 SigLIP 也删掉，用最朴素的 patch embedding 把原始像素直接喂进 LLM decoder，单 Transformer 双 head（LM head 做理解 + flow head 做像素空间生成，x-pred + v-loss）；<span class="p">效果</span> 7B 下 MMMU 51.7、V* 77.3、CountBench 59.2、VisuLogic 81.7，GenEval 0.87、DPG-Bench 86.5——理解和细粒度感知（V*/CountBench）反超 Tuna-R/Tuna，生成持平；early 收敛慢但规模上去后更强。</span></p>
+</div>
+
+<h2>3. 其他统一多模态模型（按视觉表示分类）</h2>
+
+<h3>3.1 源头与早期统一</h3>
+<p class="trend">这条线的起点是「图像要不要先过一个编码器」。Flamingo 确立了「冻结视觉编码器 + 交叉注意力」的理解范式；Fuyu-8B 最早质疑编码器，直接用像素 patch；Chameleon 和 Transfusion 则最早把理解与生成塞进同一个 Transformer。</p>
+
+<p class="paper"><b>Flamingo</b>（<a href="https://arxiv.org/abs/2204.14198">2204.14198</a>）<br>
+<code class="recipe">Flamingo: rep(clip) -&gt; ar [dec，理解-only]</code><br>
+<span class="idea"><span class="p">问题</span> 语言模型怎么「看懂」图像做 few-shot；<span class="p">方法</span> 冻结预训练视觉编码器 + 交叉注意力注入 LLM；<span class="p">效果</span> 确立了「视觉编码器 + LLM」的理解范式，但它是理解-only、不含生成。</span></p>
+
+<p class="paper"><b>Fuyu-8B</b>（Adept 2023，<a href="https://www.adept.ai/blog/fuyu-8b">技术博客</a>）<br>
+<code class="recipe">Fuyu-8B: pixel -&gt; ar [1T，无编码器]</code><br>
+<span class="idea"><span class="p">问题</span> 视觉编码器带来架构复杂与信息损失；<span class="p">方法</span> 直接把图像 patch 线性投影进 decoder-only Transformer，无专门视觉编码器；<span class="p">效果</span> 最早证明「无编码器」可行，但只做理解、不生成。</span></p>
+
+<p class="paper"><b>Chameleon</b>（<a href="https://arxiv.org/abs/2405.09818">2405.09818</a>）<br>
+<code class="recipe">Chameleon: vq -&gt; ar(全模态) [1T，early-fusion]</code><br>
+<span class="idea"><span class="p">问题</span> 多模态模型各模态拼装、割裂；<span class="p">方法</span> 文本与图像都离散成 token、一个 Transformer 从头训练做 next-token；<span class="p">效果</span> 早期 mixed-modal early-fusion 代表作，证明单模型全模态 next-token 可行。</span></p>
+
+<p class="paper"><b>Transfusion</b>（<a href="https://arxiv.org/abs/2408.11039">2408.11039</a>）<br>
+<code class="recipe">Transfusion: vae -&gt; ar / diff [1T]</code><br>
+<span class="idea"><span class="p">问题</span> 文本与图像各用一套模型、一个模型两个目标；<span class="p">方法</span> 单 Transformer，文本走 next-token、图像走去噪扩散，两个目标共享权重；<span class="p">效果</span> 「一个模型两个目标」的标志性工作，后续 Tuna/Show-o 的框架底座。</span></p>
+
+<h3>3.2 离散 token 派（纯 AR）</h3>
+<p class="trend">这条路把图像也离散成 VQ token，于是「生成」和「理解」都变成同一个 next-token 问题，架构最干净，代价是量化损失。</p>
+
+<p class="paper"><b>Emu3</b>（<a href="https://arxiv.org/abs/2409.18869">2409.18869</a>）<br>
+<code class="recipe">Emu3: vq -&gt; ar(全模态) [1T，纯 next-token]</code><br>
+<span class="idea"><span class="p">问题</span> 统一多模态能否只靠一个 next-token 目标；<span class="p">方法</span> 文本+图像+视频全离散成 token，单一 Transformer 纯 next-token 训练；<span class="p">效果</span> 把「next-token is all you need」推到多模态，理解/生成/视频统一。</span></p>
+
+<p class="paper"><b>Show-o</b>（<a href="https://arxiv.org/abs/2408.12528">2408.12528</a>）<br>
+<code class="recipe">Show-o: vq -&gt; ar + diff(离散) [1T]</code><br>
+<span class="idea"><span class="p">问题</span> 理解与生成难统一在一个模型；<span class="p">方法</span> 离散视觉 token，文本 next-token + 图像离散扩散两个目标共享 Transformer；<span class="p">效果</span> 早期单 Transformer 统一理解生成的代表，Show-o2 是改进版。</span></p>
+
+<p class="paper"><b>VILA-U</b>（<a href="https://arxiv.org/abs/2409.04429">2409.04429</a>）<br>
+<code class="recipe">VILA-U: vq -&gt; ar + diff [1T]</code><br>
+<span class="idea"><span class="p">问题</span> 统一模型缺一个通用底座；<span class="p">方法</span> 统一 VQ token + AR + 扩散做理解与生成；<span class="p">效果</span> 开源统一理解+生成的代表作之一。</span></p>
+
+<h3>3.3 连续 / 潜空间派（flow + 扩散）</h3>
+<p class="trend">这条路保留 VAE 潜空间，生成用 flow/diffusion，理解用 AR，关键设计是「理解和生成是否共享视觉表示」。</p>
+
+<p class="paper"><b>Show-o2</b>（<a href="https://arxiv.org/abs/2506.15564">2506.15564</a>）<br>
+<code class="recipe">Show-o2: vae+rep -&gt; ar / flow [1T]</code><br>
+<span class="idea"><span class="p">问题</span> Show-o 离散 token 有量化损失、质量受限；<span class="p">方法</span> 改用连续视觉表示（VAE + 表示编码器）、生成走 flow，理解生成共享；<span class="p">效果</span> 原生统一模型的连续表示路线，Tuna 对标的主要对象。</span></p>
+
+<p class="paper"><b>Janus-Pro</b>（<a href="https://arxiv.org/abs/2501.17811">2501.17811</a>）<br>
+<code class="recipe">Janus-Pro: rep(理解) + vq(生成) -&gt; ar [dec，双端分离]</code><br>
+<span class="idea"><span class="p">问题</span> 理解要语义表示、生成要重建表示，二者冲突；<span class="p">方法</span> 理解与生成各用一套编码器、解耦，但共享同一个 LLM；<span class="p">效果</span> 「双端分离」路线代表，避免统一表示的格式打架。</span></p>
+
+<p class="paper"><b>JanusFlow</b>（<a href="https://arxiv.org/abs/2411.07975">2411.07975</a>，CVPR 2026）<br>
+<code class="recipe">JanusFlow: rep(理解) + vae(生成) -&gt; ar / flow [dec]</code><br>
+<span class="idea"><span class="p">问题</span> 离散 token 生成质量有限；<span class="p">方法</span> 保留 Janus 解耦思路，生成端换成 rectified flow + VAE；<span class="p">效果</span> 把自回归与 rectified flow 统一，生成质量大幅提升。</span></p>
+
+<h3>3.4 统一 tokenizer / 编码器支线</h3>
+<p class="trend">要「理解 + 生成共用一套视觉表示」，tokenizer 是关键。这条支线专注做一个「既保留语义、又能重建」的统一视觉 tokenizer。</p>
+
+<p class="paper"><b>UniTok</b>（<a href="https://arxiv.org/abs/2502.20321">2502.20321</a>）<br>
+<code class="recipe">UniTok: unified-tokenizer -&gt; ar / diff [共享 token]</code><br>
+<span class="idea"><span class="p">问题</span> 理解与生成各用不同 tokenizer；<span class="p">方法</span> 训一个统一 tokenizer 同时服务理解与生成；<span class="p">效果</span> 统一 tokenizer 的早期探索。</span></p>
+
+<p class="paper"><b>TokLIP</b>（<a href="https://arxiv.org/abs/2505.05422">2505.05422</a>）<br>
+<code class="recipe">TokLIP: 语义 token + 重建 -&gt; 统一表示</code><br>
+<span class="idea"><span class="p">问题</span> CLIP 类表示缺重建能力、VAE 缺语义；<span class="p">方法</span> 把视觉 token 同时对齐语义（CLIP 风格）与重建；<span class="p">效果</span> 语义 + 重建兼顾的统一表示。</span></p>
+
+<p class="paper"><b>BLIP3-o</b>（<a href="https://arxiv.org/abs/2505.09568">2505.09568</a>）<br>
+<code class="recipe">BLIP3-o: rep + vae -&gt; ar / flow [1T]</code><br>
+<span class="idea"><span class="p">问题</span> 缺一个完全开源的统一多模态模型；<span class="p">方法</span> 开源统一理解+生成的完整训练与数据；<span class="p">效果</span> 开源社区的统一多模态基座。</span></p>
+
+<h3>3.5 无编码器 / 像素派（encoder-free）</h3>
+<p class="trend">最新方向：连表示编码器也去掉，直接用像素 patch。核心论据是「大规模的端到端联合训练，比预训练编码器的归纳偏置更强」。</p>
+
+<p class="paper"><b>Unveiling Encoder-Free Vision-Language Models</b>（<a href="https://arxiv.org/abs/2406.11832">2406.11832</a>）<br>
+<code class="recipe">encoder-free: pixel -&gt; ar [1T，理解]</code><br>
+<span class="idea"><span class="p">问题</span> 视觉编码器是否必需；<span class="p">方法</span> 用原始像素 patch 直接做 VLM，系统对比 encoder-free vs 有编码器；<span class="p">效果</span> 揭示 encoder-free 理解的可行性与局限。</span></p>
+
+<p class="paper"><b>From Pixels to Words: Native Vision-Language Primitives at Scale</b>（<a href="https://arxiv.org/abs/2510.14979">2510.14979</a>）<br>
+<code class="recipe">pixel → ar [1T，无编码器]</code><br>
+<span class="idea"><span class="p">问题</span> encoder-free 能否上规模；<span class="p">方法</span> 大规模原生像素→语言的训练；<span class="p">效果</span> 证明无编码器路线可扩展。</span></p>
+
+<h2>4. 共识与分歧（速记版）</h2>
+<p><b>共识：</b></p>
+<ol>
+<li>「理解 + 生成放一个 Transformer」是方向，native 统一优于长期拼装。</li>
+<li>像素空间表示在细粒度视觉理解（V*、CountBench）上优于潜空间。</li>
+<li>理解与生成联合训练能互相促进（Tuna 观察），不是必然打架。</li>
+<li>去 VAE 是收益确定的一步（Tuna-R/Tuna-2/RAE 都证实）。</li>
+</ol>
+<p><b>分歧 / 难点：</b></p>
+<ol>
+<li><b>离散 vs 连续</b>：VQ 离散 token（Emu3/Chameleon）架构最干净但量化有损；连续 flow（Transfusion/Tuna）质量高但更复杂。</li>
+<li><b>单端 vs 双端</b>：native 统一（Tuna）vs 双端分离（Janus）——统一表示是否真的能同时满足理解与生成仍有争议。</li>
+<li><b>是否要编码器</b>：encoder-free（Tuna-2/Fuyu）早期收敛慢，但规模上去更强；预训练编码器的归纳偏置到底值不值，尚未定论。</li>
+<li><b>评估</b>：理解 benchmark 与生成 benchmark 难以在同一尺度下比较，缺一个统一评测。</li>
+</ol>
+
+<hr>
+<p class="note">说明：Tuna 家族（Tuna / Tuna-R / Tuna-2）已逐篇读原文（摘要、方法、实验表、参考文献）。其余模型以 Tuna-2 的参考文献列表 + 原文标题为准归纳，个别未标注精确 arXiv 的（如 TokLIP）以标题可检索为准。本文件从 pixel-diffusion 速览里「统一多模态」一节拆出、单独成篇。</p>
+
+</main>
+</body>
+</html>
