@@ -156,7 +156,7 @@
   - `<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" defer></script>`
 - **配方 / 伪公式里的数学记号一律写 LaTeX**，别再用 Unicode 伪上标：`O(n²)` 写 `$O(n^2)$`、`O(n√n)` 写 `$O(n\sqrt{n})$`、`k·vᵀ` 写 `$k\cdot v^{\top}$`、希腊字母 `ε / φ / γ / β` 写 `$\varepsilon$` 等。配方里非数学的箭头仍用 `-&gt;`。
 - HTML 成品放 `surveys/<topic>.html`，台账放 `data/<topic>.jsonl`；更新根目录 `index.html` 和 `README.md` 的索引。
-- 写完并自查通过后**自动 `git commit`**，不要等用户提醒；提交只包含本次任务相关文件，不要顺手把无关改动一起提交。
+- 写完并自查通过后**自动 `git commit` 并 `git push`**，不要等用户提醒；提交只包含本次任务相关文件，不要顺手把无关改动一起提交。
 
 ## 论文台账（每个主题一份 JSONL）
 
