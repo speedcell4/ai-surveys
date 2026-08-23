@@ -124,9 +124,11 @@ window.MathJax = {
 <code class="recipe">sparse(block + landmark) -&gt; 无限上下文 [landmark 代表块 + 检索]</code><br>
 <span class="idea"><span class="p">问题</span> 全注意力算不了无限长；<span class="p">方法</span> 每个 block 用 landmark token 做代表，query 先检索相关 block 再做局部注意力；<span class="p">核心</span> 检索式块稀疏的早期代表。</span></p>
 
-<p class="paper"><b>HiLS Attention</b>（<a href="https://arxiv.org/abs/2607.02980">2607.02980</a>，Tencent Hunyuan 2026）<br>
-<code class="recipe">sparse(block + 层级 landmark) -&gt; 64× 外推 [端到端 chunk 检索]</code><br>
-<span class="idea"><span class="p">问题</span> chunk 稀疏注意力选不准、追不上 full attention；<span class="p">方法</span> query 先对各 chunk 独立算注意力提取 chunk 信息，再按检索分数融合，检索分数端到端可学习；<span class="p">核心</span> 原生稀疏训练，64× 外推仍有 90% 检索准确率，现有模型轻量续训即可转换。</span></p>
+<div class="deep">
+<p class="paper"><b>HiLS Attention（Hierarchical Landmark Sparse Attention）</b>（<a href="https://arxiv.org/abs/2607.02980">2607.02980</a>，Xiang Hu et al. 2026，Tencent Hunyuan）<br>
+<code class="recipe">sparse(block + 层级 landmark) -&gt; 64×+ 外推 [压缩 chunk key → chunk-mass surrogate + inter/intra-chunk softmax + LM loss 端到端]</code><br>
+<span class="idea"><span class="p">问题</span> 之前 chunk-wise 稀疏（Landmark 等）有两个死穴：chunk 重要性估计表达力不足、选择过程端到端不可导，于是选不准、追不上 full attention；<span class="p">方法</span> HiLS 用压缩后的 chunk key 估一个 chunk-mass surrogate，把注意力因式分解成 inter-chunk（检索分数）与 intra-chunk（块内 softmax）两部分；检索分数直接参与前向注意力，next-token 损失的梯度能一路流回来，因此做的是原生稀疏训练；<span class="p">核心</span> 域内长度打平/超过 full attention，外推 >64× 仍 90% 检索准确率，8K 训练的模型在 4M（约 512×）NIAH 上仍 90–100%；现有 full-attention 模型轻量续训即可转换，保住域内性能、换来超长外推 + 稀疏 KV 加速。它的边界是只解决「chunk 级选择」这一条线，与 DeepSeek CSA/HCA 的「先压缩再选」形成对台——1M+ 下谁更省、更准仍是开放问题。</span></p>
+</div>
 
 <p class="paper"><b>MiniMax Sparse Attention（MSA）</b>（<a href="https://arxiv.org/abs/2606.13392">2606.13392</a>，2026）<br>
 <code class="recipe">sparse(block + local) -&gt; $O(kB_k)$ [GQA 组内 Top-k block + 强制 local block]</code><br>

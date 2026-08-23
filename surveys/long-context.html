@@ -170,8 +170,8 @@ window.MathJax = {
 
 <div class="deep">
 <p class="paper"><b>HiLS Attention（Hierarchical Sparse Attention Done Right）</b>（<a href="https://arxiv.org/abs/2607.02980">2607.02980</a>，2026，种子论文）<br>
-<code class="recipe">sparse(层级 landmark) -&gt; 64× 外推 [端到端 chunk 检索]</code><br>
-<span class="idea"><span class="p">问题</span> 现有 chunk-wise 稀疏注意力 chunk 选不准、追不上 full attention；<span class="p">方法</span> query 先对各 chunk 独立算注意力提取 chunk 信息，再按检索分数融合，检索分数直接进前向、用 LM loss 端到端优化；<span class="p">核心</span> 检索分数可端到端学习、原生稀疏训练，64× 外推仍有 90% 检索准确率，现有 full-attention 模型轻量续训即可转换。</span></p>
+<code class="recipe">sparse(层级 landmark) -&gt; 64×+ 外推 [压缩 chunk key → chunk-mass surrogate + inter/intra-chunk softmax + LM loss 端到端]</code><br>
+<span class="idea"><span class="p">问题</span> 现有 chunk-wise 稀疏注意力 chunk 选不准、追不上 full attention；<span class="p">方法</span> 用压缩后的 chunk key 估 chunk-mass surrogate，把注意力拆成 inter-chunk（检索分数）与 intra-chunk（块内 softmax），检索分数直接进前向、用 next-token 损失端到端优化；<span class="p">核心</span> 检索分数可端到端学习、原生稀疏训练，64× 外推仍有 90% 检索准确率，8K 训练的模型在 4M NIAH 上仍 90–100%，现有 full-attention 模型轻量续训即可转换；它的边界是 chunk 级选择，和 DeepSeek CSA/HCA 的「先压缩再选」谁更适合 1M+ 仍是开放问题。</span></p>
 </div>
 
 <p class="paper"><b>DashAttention（Differentiable Adaptive Sparse Hierarchical）</b>（<a href="https://arxiv.org/abs/2605.18753">2605.18753</a>，2026）<br>
