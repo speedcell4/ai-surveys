@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>世界模型速览（World Models，2018 ~ 2026）</title>
+<link rel="stylesheet" href="../assets/css/main.css">
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$']], displayMath: [['$$', '$$']], processEscapes: true },
+  svg: { fontCache: 'global' },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'option'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" defer></script>
+</head>
+<body>
+<main class="container">
+
+<div class="lvbar">
+  <span class="lvlabel">阅读深度</span>
+  <button class="lvbtn" data-lv="1">脉络</button>
+  <button class="lvbtn active" data-lv="2">完整</button>
+  <button class="lvbtn" data-lv="3">深读</button>
+</div>
+
+
+<h1>世界模型（World Models）速览</h1>
+<p class="sub">覆盖 2018 ~ 2026（含 2018-2022 源头）· 面向没读过原文的读者 · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话（问题 / 方法 / 核心）</p>
+
+<section class="lv1-guide">
+<h2>零基础读法：先搞清楚「世界模型」到底在解决什么</h2>
+<p><b>定义</b>：世界模型是智能体内部的一个「可学习的模拟器」，用来预测世界在某个动作之后会变成什么，或预测未来一段时间会发生什么。它可以工作在像素空间、隐变量空间、token 序列、3D 占用网格等不同表示上。</p>
+<p><b>方法</b>：早年的模型基于强化学习（model-based RL），在隐状态里学动力学、用想象力训练策略（PlaNet、Dreamer、MuZero）。2023 年后，Sora 一类视频生成模型被当作「世界模拟器」，用扩散 / 自回归 / token 预测生成高保真未来视频；另一条线是 LeCun 的 JEPA：不重建像素，只在表征空间预测未来表征。</p>
+<p><b>模型</b>：RSSM、Transformer world model、Dreamer 系列、Genie、Cosmos、V-JEPA、DIAMOND、UniSim、iVideoGPT、交互式游戏世界模型（Oasis、MineWorld、AlayaWorld）等。</p>
+<p><b>算法</b>：核心训练目标有重建 + KL（ELBO）、next-token + CE、扩散 / flow 匹配、JEPA 表征预测；使用时靠 rollout、MPC、想象中训练策略、闭环交互或反事实模拟。</p>
+<p><b>评测</b>：有视觉质量指标（FID / FVD / LPIPS）、动作跟随度、长时记忆 / 物理一致性、下游任务成功率（机器人、自动驾驶）；最新基准开始强调「闭环 / 交互」而非只看单条视频。</p>
+<p>读每篇时问：它在哪个空间做预测？有没有动作条件？是「为了决策」还是「为了生成」？它靠什么防止长时预测漂移？</p>
+</section>
+
+<h2>0. 先看懂「配方」记法</h2>
+<table>
+<tr><th>记号</th><th>意思</th></tr>
+<tr><td><code>rssm / transformer / diffusion / jepa</code></td><td>动力学或生成主干：循环状态空间模型 / Transformer / 扩散模型 / 联合嵌入预测架构</td></tr>
+<tr><td><code>pixel / latent / token / 3d</code></td><td>在什么空间预测：原始像素 / 连续隐变量 / 离散 token / 3D 占用、高斯、NeRF</td></tr>
+<tr><td><code>action-conditioned / action-free</code></td><td>是否有动作 / 控制条件；有动作才能做「如果我这样做，世界会怎样」</td></tr>
+<tr><td><code>policy-in-loop / sim / rollout</code></td><td>世界模型怎么被用：策略在想象中训练 / 当模拟器评测 / 一步步滚动预测</td></tr>
+<tr><td><code>-&gt; 预测 + 目标</code></td><td>预测什么 + 靠什么目标训练：next-frame / next-token / latent + ELBO / diffusion / JEPA / reward</td></tr>
+<tr><td><code>CE / ELBO / flow-matching / JEPA / RLVR / reward</code></td><td>目标：交叉熵 / 变分下界 / flow 匹配 / 表征预测 / 带可验证奖励的强化学习 / 任务奖励</td></tr>
+</table>
+<blockquote>世界模型 = <b>从观测（通常 + 动作）预测未来状态 / 视频 / 表征的模型</b>。最核心的分歧是：<b>要重建像素</b>（生成式、高保真但贵），还是<b>只在表征空间预测</b>（JEPA、便宜但不好直接看），以及<b>它到底是在「理解世界」还是在「模拟世界」</b>。</blockquote>
+
+<h2>1. 主线：三代 + 三个轴在收敛</h2>
+<ol>
+<li><b>潜状态 / MBRL 世界模型</b>（2018-2022）：把环境压成隐状态，学状态转移，再用「想象中训练」提升采样效率。代表：World Models、PlaNet、Dreamer、MuZero、DreamerV3。</li>
+<li><b>生成式视频世界模型</b>（2023-2025）：Sora 引爆「视频生成 = 世界模拟器」，Genie、UniSim、DIAMOND、Cosmos 等把世界模型做大，输出高保真未来视频。</li>
+<li><b>交互式 / 具身世界模型</b>（2025-2026）：重心从「单条视频好看」转向「长时间闭环、动作跟随、空间记忆、可当机器人 / 自动驾驶模拟器用」，JEPA 与扩散两条线也在融合。</li>
+</ol>
+<p>三个「轴」在同时收敛：</p>
+<table>
+<tr><th>轴</th><th>从</th><th>到</th><th>代表</th></tr>
+<tr><td>表示</td><td>压缩隐向量</td><td>pixel / token / 3D / 表征空间</td><td>RSSM → DiT / JEPA / 3DGS</td></tr>
+<tr><td>目标</td><td>重建 + KL</td><td>扩散 / flow / next-token / JEPA / RLVR</td><td>Dreamer → Sora → V-JEPA2 → RLVR-World</td></tr>
+<tr><td>用法</td><td>想象中训练策略</td><td>开放世界交互、机器人 / 驾驶模拟</td><td>DayDreamer → Genie / Cosmos / OmniDreams</td></tr>
+</table>
+<p>交点是一个开放问题：<b>好看的未来视频，到底算不算「理解了物理」？</b> 后面的文章不断用记忆、几何、动作一致性、反事实和闭环评测来逼近这个答案。</p>
+
+<h2>2. 逐篇配方 + 一句话</h2>
+
+<h3>2.0 源头 / 地基（2018-2022，奠定问题与 baseline）</h3>
+<p class="trend">这一块在 2018 年前后把「世界模型」从认知科学概念变成可训练的 AI 模块：先把高维观测压成隐状态，再学状态转移，最后在想象里训练策略，解决强化学习采样效率低的问题。代表是 Ha &amp; Schmidhuber 的 World Models、Hafner 的 PlaNet/Dreamer 系列、DeepMind 的 MuZero，以及把 Transformer 引入世界模型的 IRIS / TWM。核心矛盾是「预测精度 vs 采样效率」：RSSM 便宜但画面模糊，像素级 / token 级重建更保真但更贵，还容易出现长时误差累积。这一代给后面的视频世界模型铺好了路——后者把「学动力学」换成「直接生成未来视频」，但「长时一致 + 动作可控」的痛点一直没变。</p>
+
+<div class="deep">
+<p class="paper"><b>World Models（Ha &amp; Schmidhuber 2018）</b>（<a href="https://arxiv.org/abs/1803.10122">1803.10122</a>）<br>
+<code class="recipe">vae(pixel) + rnn(latent + action) -&gt; next-latent + ELBO / 重建</code><br>
+<span class="idea"><span class="p">问题</span> 强化学习在高维视觉环境里采样太贵、无法泛化；<span class="p">方法</span> 先用 VAE 学视觉表征，再用 RNN 学状态转移，最后在「梦境」里训练小控制器；<span class="p">核心</span> 把「世界模型 + 想象中训练」这个范式正式立起来，后续 PlaNet/Dreamer/Genie 都是从这条线长出来的。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>PlaNet：Learning Latent Dynamics for Planning from Pixels（Hafner et al. 2019）</b>（<a href="https://arxiv.org/abs/1811.04551">1811.04551</a>）<br>
+<code class="recipe">rssm(pixel + action) -&gt; latent rollout + ELBO</code><br>
+<span class="idea"><span class="p">问题</span> 图像级动力学难学，没法做长时规划；<span class="p">方法</span> 用循环状态空间模型 RSSM 把观测、隐状态、随机状态分开建模，学成可展开的隐动力学；<span class="p">核心</span> RSSM 成为 Dreamer 系列的通用骨架，把「在隐空间规划」做成可扩展工程。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>MuZero：Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model（Schrittwieser et al. 2020）</b>（<a href="https://arxiv.org/abs/1911.08265">1911.08265</a>）<br>
+<code class="recipe">learned-model(state + action) -&gt; value/policy/reward + MCTS</code><br>
+<span class="idea"><span class="p">问题</span> 传统 model-based 规划依赖真实模拟器或已知规则，现实任务没有；<span class="p">方法</span> 只学隐状态转移、reward 和 value/policy，配合蒙特卡洛树搜索在隐空间做前瞻；<span class="p">核心</span> 证明「不需要重建观测」的隐模型也能在多种游戏里达到超人级表现，是 JEPA 思想的重要前身。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>Dreamer：Dream to Control（Hafner et al. 2020）</b>（<a href="https://arxiv.org/abs/1912.01603">1912.01603</a>）<br>
+<code class="recipe">rssm(pixel + action) -&gt; latent rollout + value-policy imagination</code><br>
+<span class="idea"><span class="p">问题</span> 光有世界模型不够，怎么从它推导出好策略；<span class="p">方法</span> 在学到的隐动力学里 rollout，用值函数估计回报，端到端训练 actor-critic；<span class="p">核心</span> 「在想象中学习行为」成为 Dreamer 系列的标准范式，把模型学习和策略学习绑成一个闭环。</span></p>
+</div>
+
+<p class="paper"><b>DreamerV2：Mastering Atari with Discrete World Models（Hafner et al. 2021）</b>（<a href="https://arxiv.org/abs/2010.02193">2010.02193</a>）<br>
+<code class="recipe">rssm_discrete(pixel + action) -&gt; next-token + ELBO / policy</code><br>
+<span class="idea"><span class="p">问题</span> 连续隐状态容易模糊、损失重构信息，Atari 这种精细场景尤其吃亏；<span class="p">方法</span> 把隐状态改成离散类别 / categorical token，再用 straight-through 训练；<span class="p">核心</span> 离散世界模型成为 DreamerV2/V3 的关键升级，让想象里训练能稳定跑大规模控制。</span></p>
+
+<p class="paper"><b>DayDreamer：World Models for Physical Robot Learning（Wu et al. 2022）</b>（<a href="https://arxiv.org/abs/2206.14176">2206.14176</a>）<br>
+<code class="recipe">dreamer(rgb + proprio + action) -&gt; latent rollout + reward / imagination</code><br>
+<span class="idea"><span class="p">问题</span> Dreamer 系列主要在模拟器 / 游戏里验证，没证明能上真机；<span class="p">方法</span> 把 DreamerV3 的隐想象直接用在四足 / 机械臂上，只靠 onboard 观测和奖励；<span class="p">核心</span> 证明潜状态世界模型可以在真实机器人上从零学运动，且免仿真、免重置。</span></p>
+
+<p class="paper"><b>IRIS：Transformers Are Sample-Efficient World Models（Micheli et al. 2023）</b>（<a href="https://arxiv.org/abs/2209.00588">2209.00588</a>）<br>
+<code class="recipe">vq-vae(pixel) + transformer(token + action) -&gt; next-token + CE</code><br>
+<span class="idea"><span class="p">问题</span> 世界模型大多用 RNN/卷积，长程依赖和离散 token 处理有限；<span class="p">方法</span> 用 VQ-VAE 离散化观测，再由 Transformer 自回归预测下一帧 token，在想象中训练策略；<span class="p">核心</span> 把「世界模型」和「GPT 式 next-token」接上，成为后续 token-based 世界模型的模板。</span></p>
+
+<p class="paper"><b>TWM：Transformer-based World Models Are Happy With 100k Interactions（Robine et al. 2023）</b>（<a href="https://arxiv.org/abs/2303.07109">2303.07109</a>）<br>
+<code class="recipe">transformer(token + action + reward) -&gt; next-token + CE / rollout</code><br>
+<span class="idea"><span class="p">问题</span> 只用 RNN 的隐状态会把历史压得太狠，样本效率仍不够；<span class="p">方法</span> 用 Transformer 自回归建模 token、action、reward 的完整序列，直接用真实轨迹和想象轨迹训练；<span class="p">核心</span> 数据效率大幅提升，说明把历史显式摊成 token 比压缩成向量更利于世界建模。</span></p>
+
+<div class="deep">
+<p class="paper"><b>DreamerV3：Mastering Diverse Domains through World Models（Hafner et al. 2023）</b>（<a href="https://arxiv.org/abs/2301.04104">2301.04104</a>）<br>
+<code class="recipe">rssm_discrete(pixel + action) -&gt; next-token + symlog / imagination</code><br>
+<span class="idea"><span class="p">问题</span> 一个世界模型算法能不能跨 150 个任务、跨领域、少调参地稳定工作；<span class="p">方法</span> 用离散 RSSM、symlog 预测、free bits、分位数回报等技巧，把超参数做到几乎固定；<span class="p">核心</span> DreamerV3 成为通用潜状态世界模型基线，后续很多具身 / 驾驶工作都拿它做起点。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>A Path Towards Autonomous Machine Intelligence（LeCun 2022）</b>（<a href="https://openreview.net/pdf?id=BZ5a1r-kVsf">OpenReview position paper</a>）<br>
+<code class="recipe">jepa(observation + action) -&gt; latent prediction + energy / non-collapse</code><br>
+<span class="idea"><span class="p">问题</span> 自回归生成式模型逐像素预测未来，昂贵且未必学到高层语义；<span class="p">方法</span> 提出 Joint-Embedding Predictive Architecture：在表征空间预测未来，配合能量模型 / 正则防止塌缩；<span class="p">核心</span> 给「不重建像素的世界模型」提供了纲领，直接催生 I-JEPA / V-JEPA 一脉。</span></p>
+</div>
+
+<h3>2.1 潜状态 / 决策耦合世界模型（2024-2026）</h3>
+<p class="trend">这一块继承 Dreamer / RSSM 的「决策耦合」问题：世界模型存在的目的是让策略更省样本、更能泛化。2024-2026 的变化是把预训练视觉特征（DINO-WM）、语义解耦（DisWM）、强化学习直接优化预测质量（RLVR-World）、更稳的 JEPA（LeWorldModel）搬进来。核心矛盾从「能不能学」变成「学到的隐空间到底能不能被 planner 用」：目标函数和下游规划的错配成了新瓶颈。</p>
+
+<div class="deep">
+<p class="paper"><b>DINO-WM：World Models on Pre-trained Visual Features enable Zero-shot Planning（Zhou et al. 2024）</b>（<a href="https://arxiv.org/abs/2411.04983">2411.04983</a>）<br>
+<code class="recipe">dino(latent) + dynamics(action) -&gt; next-latent + reconstruction-free loss</code><br>
+<span class="idea"><span class="p">问题</span> 从零在像素上学世界模型又贵又过拟合；<span class="p">方法</span> 冻结 DINO 预训练视觉特征，只学一个隐动力学，用零样本 / 单示例规划目标；<span class="p">核心</span> 证明「预训练特征 + 轻量动力学」可以脱离任务标签直接做物理规划，是把视觉基础模型和世界模型结合的样板。</span></p>
+</div>
+
+<p class="paper"><b>Improving Transformer World Models for Data-Efficient RL（Dedieu et al. 2025）</b>（<a href="https://arxiv.org/abs/2502.01591">2502.01591</a>）<br>
+<code class="recipe">transformer(token + action) -&gt; next-token + CE / Dyna warmup / block teacher forcing</code><br>
+<span class="idea"><span class="p">问题</span> Transformer 世界模型仍不够样本高效、训练不稳；<span class="p">方法</span> 三个改动：Dyna 热启动、最近邻 patch tokenizer、block teacher forcing；<span class="p">核心</span> 在 100k 交互级别继续压榨 Transformer world model 的数据效率。</span></p>
+
+<p class="paper"><b>DisWM：Disentangled World Models（Wang et al. 2025）</b>（<a href="https://arxiv.org/abs/2503.08751">2503.08751</a>）<br>
+<code class="recipe">disentangled-latent(video) -&gt; semantic transfer + reconstruction / KL</code><br>
+<span class="idea"><span class="p">问题</span> 干扰视频里的背景、纹理和语义缠在一起，跨域迁移难；<span class="p">方法</span> 先解耦语义 / 外观表征，再用离线到在线的潜蒸馏把知识迁到下游世界模型；<span class="p">核心</span> 用「解耦」让世界模型在视觉分布变化下更鲁棒、样本更省。</span></p>
+
+<p class="paper"><b>RLVR-World：Training World Models with Reinforcement Learning（Wu et al. 2025）</b>（<a href="https://arxiv.org/abs/2505.13934">2505.13934</a>）<br>
+<code class="recipe">wm(video + action) -&gt; rollout + RLVR / verifiable reward</code><br>
+<span class="idea"><span class="p">问题</span> 世界模型通常只优化重建 / 似然，不一定直接优化下游可验证指标；<span class="p">方法</span> 用强化学习 + 可验证奖励（RLVR）直接优化 transition 预测质量（准确率、感知质量）；<span class="p">核心</span> 把「世界模型训练」从监督 / 自监督目标挪到 RL 目标，强调预测要服务下游评估。</span></p>
+
+<div class="deep">
+<p class="paper"><b>LeWorldModel：Stable End-to-End JEPA from Pixels（Maes et al. 2026）</b>（<a href="https://arxiv.org/abs/2603.19312">2603.19312</a>）<br>
+<code class="recipe">jepa(pixel + action) -&gt; next-latent + anti-collapse / consistency</code><br>
+<span class="idea"><span class="p">问题</span> JEPA 式潜世界模型容易表征塌缩、需要 EMA / 预训练编码器等复杂补丁；<span class="p">方法</span> 用单预测损失 + 一个反塌缩正则，从像素端到端学动作条件 JEPA；<span class="p">核心</span> 给出更简单稳定的 JEPA 训练配方，把「表征空间预测」做成可复现 baseline。</span></p>
+</div>
+
+<h3>2.2 生成式视频世界模型 / 世界模拟器（2023-2025）</h3>
+<p class="trend">这一块解决的是「能不能直接生成未来视频，把它当世界模型用」。Sora 在 2024 年初让「视频生成 = 世界模拟器」进入主流，Genie 证明无标注互联网视频也能学出可交互环境，UniSim / DIAMOND / GameNGen / iVideoGPT 各从模拟器、游戏、机器人数据切入，Cosmos 把它做成物理 AI 的底座平台。核心矛盾是「画质高」和「物理真、动作可控、长时不漂移」不是一回事：单条视频惊艳，闭环跑几步就会崩。这一段的瓶颈正是后面交互式 / 3D 世界模型要接棒的起点。</p>
+
+<div class="deep">
+<p class="paper"><b>Sora：Video Generation Models as World Simulators（OpenAI 2024）</b>（<a href="https://openai.com/index/video-generation-models-as-world-simulators/">OpenAI technical report</a>）<br>
+<code class="recipe">dit(patch + text) -&gt; video + flow / next-token</code><br>
+<span class="idea"><span class="p">问题</span> 视频生成模型能不能不只是「拼帧」，而是真正模拟世界动态；<span class="p">方法</span> 用 DiT 把视频 patch 化成 token、以文本 / 图像为条件生成长视频，借助大规模数据涌现 3D 一致性、物体永久性、简单物理；<span class="p">核心</span> 首次把「视频生成模型 = 世界模拟器」推到公众视野，后面 Genie / Cosmos / V-JEPA 都在回应它是否真的懂物理。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>Genie：Generative Interactive Environments（Bruce et al. 2024）</b>（<a href="https://arxiv.org/abs/2402.15391">2402.15391</a>）<br>
+<code class="recipe">transformer(token + latent-action) -&gt; interactive-video + next-token / CE</code><br>
+<span class="idea"><span class="p">问题</span> 现成视频数据没有动作标注，怎么学「可控交互世界」；<span class="p">方法</span> 从无标注互联网视频里学一个潜在动作空间，让用户逐帧控制角色移动，模型据此生成下一帧；<span class="p">核心</span> 证明「无动作标签也能学交互世界」，并成为 Genie 2/3、MineWorld 等后续工作的地基。</span></p>
+</div>
+
+<p class="paper"><b>UniSim：A Neural Closed-Loop Sensor Simulator（Yang et al. 2023）</b>（<a href="https://arxiv.org/abs/2308.01898">2308.01898</a>）<br>
+<code class="recipe">transformer(token + action) -&gt; next-frame + next-token / CE</code><br>
+<span class="idea"><span class="p">问题</span> 机器人仿真缺一个能闭环、能泛化的统一模拟器；<span class="p">方法</span> 把视觉 / 动作 / 语言统一成 token，训练自回归下一帧预测，支持多传感器闭环模拟；<span class="p">核心</span> 提出「神经闭环模拟器」路线，让一个世界模型替代手工仿真器，服务训练与评估。</span></p>
+
+<p class="paper"><b>DIAMOND：Diffusion for World Modeling（Alonso et al. 2024）</b>（<a href="https://arxiv.org/abs/2405.12399">2405.12399</a>）<br>
+<code class="recipe">diffusion(latent + action) -&gt; next-frame + flow / denoise</code><br>
+<span class="idea"><span class="p">问题</span> 离散 token 世界模型会丢掉视觉细节，影响 Atari 策略；<span class="p">方法</span> 用扩散模型在 latent 里生成下一帧，保留视觉细节，再在想象中训练策略；<span class="p">核心</span> 把「世界模型」从 token 自回归换成 diffusion，说明像素细节对某些控制任务确实重要。</span></p>
+
+<p class="paper"><b>GameNGen：Diffusion Models Are Real-Time Game Engines（Valevski et al. 2024）</b>（<a href="https://arxiv.org/abs/2408.14837">2408.14837</a>）<br>
+<code class="recipe">diffusion(frame + action) -&gt; next-frame + denoise / distillation</code><br>
+<span class="idea"><span class="p">问题</span> 神经网络世界模型能不能实时当游戏引擎；<span class="p">方法</span> 训练 DOOM 的扩散世界模型，再用蒸馏做到实时生成可玩轨迹；<span class="p">核心</span> 首次证明扩散世界模型可以实时、长程交互，是 Oasis、MineWorld 等「神经游戏引擎」的开端。</span></p>
+
+<p class="paper"><b>iVideoGPT：Interactive VideoGPTs are Scalable World Models（Wu et al. 2024）</b>（<a href="https://arxiv.org/abs/2405.15223">2405.15223</a>）<br>
+<code class="recipe">transformer(token + action) -&gt; next-frame + next-token / CE</code><br>
+<span class="idea"><span class="p">问题</span> 通用视频世界模型需要一个可规模化的交互式 token 框架；<span class="p">方法</span> 把观测、动作、奖励都 token 化，用 GPT 式自回归做下一帧预测，支持机器人 / 游戏等下游；<span class="p">核心</span> 提供一个可扩展的交互式视频世界模型范式，成为后续具身视频世界模型的常用 baseline。</span></p>
+
+<p class="paper"><b>Pandora：Towards General World Model with Natural Language Actions and Video States（Xiang et al. 2024）</b>（<a href="https://arxiv.org/abs/2406.09455">2406.09455</a>）<br>
+<code class="recipe">autoregressive-diffusion(video + language-action) -&gt; next-video + denoise / CE</code><br>
+<span class="idea"><span class="p">问题</span> 真实世界动作多种多样，不能用固定按键 / 低维动作覆盖；<span class="p">方法</span> 用自然语言当动作接口，模型以当前视频 + 语言命令生成未来视频；<span class="p">核心</span> 把「通用世界模型」做成语言可交互，降低跨领域控制成本。</span></p>
+
+<p class="paper"><b>WorldDreamer：Towards General World Models via Predicting Masked Tokens（Wang et al. 2024）</b>（<a href="https://arxiv.org/abs/2401.09985">2401.09985</a>）<br>
+<code class="recipe">transformer(video) -&gt; masked-token + reconstruction / next-token</code><br>
+<span class="idea"><span class="p">问题</span> 世界模型常绑定单一场景（游戏 / 驾驶），不够通用；<span class="p">方法</span> 在统一 token 空间用掩码预测学动态，再生成未来视频；<span class="p">核心</span> 用「预测 masked token」把世界模型推向更通用的视觉动态建模。</span></p>
+
+<div class="deep">
+<p class="paper"><b>Cosmos World Foundation Model Platform for Physical AI（NVIDIA 2025）</b>（<a href="https://arxiv.org/abs/2501.03575">2501.03575</a>）<br>
+<code class="recipe">diffusion / autoregressive(video + action) -&gt; next-video + flow / CE + post-training</code><br>
+<span class="idea"><span class="p">问题</span> 物理 AI 缺一个可定制、可规模化的世界模型平台；<span class="p">方法</span> 提供 Cosmos Predict / Transfer 等多个世界基础模型，支持文本 / 视频 / 动作条件生成，再交给开发者微调；<span class="p">核心</span> 把世界模型从论文原型变成产业级平台，成为机器人 / 自动驾驶合成数据的底座。</span></p>
+</div>
+
+<h3>2.3 JEPA / 自监督世界模型（2022-2026）</h3>
+<p class="trend">这一块回应 LeCun 的纲领：世界模型未必要重建每个像素，只需在表征空间预测未来。I-JEPA 先做图像表征预测，V-JEPA 扩展到视频，V-JEPA 2 进一步结合少量机器人交互数据做预测与规划，V-JEPA 2.1 再补上 dense feature。核心矛盾是「怎么防止表征塌缩」以及「预测出的表征到底能不能被下游用」：EMA、target encoder、对比 / 正则、几何校准都在打这个补丁。</p>
+
+<p class="paper"><b>I-JEPA：Self-Supervised Learning from Images with JEPA（Assran et al. 2023）</b>（<a href="https://arxiv.org/abs/2301.08243">2301.08243</a>）<br>
+<code class="recipe">jepa(image) -&gt; latent target + energy / non-collapse</code><br>
+<span class="idea"><span class="p">问题</span> 自监督视觉表征过度依赖数据增广、负样本或重建；<span class="p">方法</span> 从图像 context block 预测 target block 的表征，不重建像素；<span class="p">核心</span> 把 JEPA 从想法变成可训练的视觉自监督方法，是 V-JEPA 的直接前身。</span></p>
+
+<p class="paper"><b>V-JEPA：Revisiting Feature Prediction for Learning Visual Representations from Video（Bardes et al. 2024）</b>（<a href="https://arxiv.org/abs/2404.08471">2404.08471</a>）<br>
+<code class="recipe">jepa(video) -&gt; future-latent + feature-prediction / non-collapse</code><br>
+<span class="idea"><span class="p">问题</span> 视频自监督能否只用表征预测，不要文本、负样本、重建；<span class="p">方法</span> 从过去视频块预测未来视频块的表征，靠 target encoder 和阻止塌缩机制；<span class="p">核心</span> 证明纯视频特征预测能学到强时空表征，让 JEPA 进入视频世界模型。</span></p>
+
+<div class="deep">
+<p class="paper"><b>V-JEPA 2：Self-Supervised Video Models Enable Understanding, Prediction and Planning（Bardes et al. 2025）</b>（<a href="https://arxiv.org/abs/2506.09985">2506.09985</a>）<br>
+<code class="recipe">jepa(video + interaction) -&gt; future-latent + prediction / probing / planning</code><br>
+<span class="idea"><span class="p">问题</span> 只靠互联网视频学不到「动作会怎样改变世界」；<span class="p">方法</span> 大规模视频预训练 + 少量机器人交互数据，让模型既能理解、预测，又能用注意力 probe 做规划；<span class="p">核心</span> 明确把 JEPA 定位成世界模型，并在世界模型基准上验证「理解、预测、规划」三位一体。</span></p>
+</div>
+
+<p class="paper"><b>V-JEPA 2.1：Unlocking Dense Features in Video Self-Supervised Learning（2026）</b>（<a href="https://arxiv.org/abs/2603.14482">2603.14482</a>）<br>
+<code class="recipe">jepa_dense(video) -&gt; dense-latent + mask-prediction / consistency</code><br>
+<span class="idea"><span class="p">问题</span> V-JEPA 2 的全局表征不够 dense，难以服务分割 / 定位；<span class="p">方法</span> 增加 dense 预测损失，让可见与掩码 token 都参与学习，同时保留全局场景理解；<span class="p">核心</span> 让 JEPA 表征既有全局语义又有局部几何，扩大世界模型下游适用范围。</span></p>
+
+<p class="paper"><b>DINO-Foresight：Looking into the Future with DINO（Karypidis et al. 2024）</b>（<a href="https://arxiv.org/abs/2412.11673">2412.11673</a>）<br>
+<code class="recipe">vfm(video) -&gt; future-feature + masked-feature-transformer</code><br>
+<span class="idea"><span class="p">问题</span> 未来预测能不能直接建在预训练视觉特征上；<span class="p">方法</span> 用 masked feature transformer 在 DINO 特征空间预测未来特征，服务场景理解 / 下游任务；<span class="p">核心</span> 走「预训练特征 + 未来预测」的轻量世界模型路线，与 DINO-WM 互为补充。</span></p>
+
+<h3>2.4 交互式 / 实时世界模型（2024-2026，最近一年主线）</h3>
+<p class="trend">最近一年最大的变化是「闭环交互」：不再只看一条未来视频好不好看，而是要求实时、长时记忆、动作跟随、空间一致、可重访。代表有 Oasis（实时 Minecraft）、MineWorld（开源 Minecraft 世界模型）、World-in-World（闭环机器人评测）、Vid2World（把视频扩散模型改造成可交互世界）、WorldPlay / RELIC / Astra（实时流式 + 几何 / 记忆），以及 2026 年的 DreamX-World / AlayaWorld / Wonder（分钟级导航与可玩世界）。核心矛盾是长时 rollout 的误差累积和内存 / 延迟：把整条历史塞进 denoiser 或 KV cache 会越来越贵，所以记忆压缩、几何状态、蒸馏 / 流式训练成了共同解。</p>
+
+<p class="paper"><b>Oasis：A Universe in a Transformer（Decart / Etched 2024）</b>（<a href="https://oasis-model.github.io/">项目页</a>）<br>
+<code class="recipe">transformer(frame + action) -&gt; next-frame + next-token / CE</code><br>
+<span class="idea"><span class="p">问题</span> 能否用单一 Transformer 实时生成可玩游戏世界；<span class="p">方法</span> 用 Minecraft 数据训练下一帧模型，做实时交互；<span class="p">核心</span> 是「神经游戏引擎」走向产品的标志，但只玩 Minecraft、长时一致性有限。</span></p>
+
+<p class="paper"><b>MineWorld：A Real-Time and Open-Source Interactive World Model on Minecraft（2025）</b>（<a href="https://arxiv.org/abs/2504.08388">2504.08388</a>）<br>
+<code class="recipe">transformer(token + action) -&gt; next-frame + next-token / CE</code><br>
+<span class="idea"><span class="p">问题</span> 交互式游戏世界模型大多闭源或数据不公开；<span class="p">方法</span> 开源 Minecraft 世界模型 + 数据集，支持实时控制；<span class="p">核心</span> 为交互式世界模型提供可复现、可扩展的开放 baseline，方便社区做长时一致性和控制研究。</span></p>
+
+<p class="paper"><b>Vid2World：Crafting Video Diffusion Models to Interactive World Models（2025）</b>（<a href="https://arxiv.org/abs/2505.14357">2505.14357</a>）<br>
+<code class="recipe">diffusion(video + action) -&gt; next-frame + flow / action-conditioning</code><br>
+<span class="idea"><span class="p">问题</span> 如何复用大规模视频扩散模型，省去从零训练交互世界模型；<span class="p">方法</span> 给预训练视频扩散模型注入动作条件，直接改造成可交互世界模型；<span class="p">核心</span> 走「改造现成视频模型」的省钱路线，降低交互式世界模型门槛。</span></p>
+
+<p class="paper"><b>World-in-World：World Models in a Closed-Loop World（2025）</b>（<a href="https://arxiv.org/abs/2510.18135">2510.18135</a>）<br>
+<code class="recipe">action-conditioned-video(world + action) -&gt; rollout + closed-loop policy eval</code><br>
+<span class="idea"><span class="p">问题</span> 现有评测只做开环视频、脱离闭环决策；<span class="p">方法</span> 把世界模型放进闭环，用统一 action API 驱动预训练生成器，评测预测 + 规划；<span class="p">核心</span> 强调「闭环」是评价世界模型是否真正可用的关键，而不只是单条视频好看。</span></p>
+
+<p class="paper"><b>WorldPlay：Towards Long-Term Geometric Consistency for Real-Time Interactive World Modeling（2025）</b>（<a href="https://arxiv.org/abs/2512.14614">2512.14614</a>）<br>
+<code class="recipe">streaming-diffusion(video + action) -&gt; next-frame + flow / geometric-memory</code><br>
+<span class="idea"><span class="p">问题</span> 实时交互世界模型要么快但漂移，要么记性好但慢；<span class="p">方法</span> 用 dual action representation + 长期几何记忆，做流式扩散；<span class="p">核心</span> 在速度与长期一致性之间取得平衡，是实时世界建模的代表工程。</span></p>
+
+<p class="paper"><b>Astra：General Interactive World Model with Autoregressive Denoising（2025）</b>（<a href="https://arxiv.org/abs/2512.08931">2512.08931</a>）<br>
+<code class="recipe">autoregressive-diffusion(video + action) -&gt; next-video + denoise / CE</code><br>
+<span class="idea"><span class="p">问题</span> 通用交互世界模型需要处理多种动作、长时未来；<span class="p">方法</span> 用自回归去噪统一预测多步未来、支持多类动作条件；<span class="p">核心</span> 把自回归与扩散结合，面向通用交互式世界建模。</span></p>
+
+<div class="deep">
+<p class="paper"><b>DreamX-World 1.0：A General-Purpose Interactive World Model（2026）</b>（<a href="https://arxiv.org/abs/2606.16993">2606.16993</a>）<br>
+<code class="recipe">diffusion(text/image + camera/action/memory) -&gt; next-video + flow / memory-conditioning</code><br>
+<span class="idea"><span class="p">问题</span> 交互世界模型缺「相机导航 + 重访 + 事件交互 + 自回归」的通用组合；<span class="p">方法</span> 从 Wan2.2-TI2V 起步，逐步加相机控制、记忆条件、事件交互、自回归生成；<span class="p">核心</span> 把「可控长时世界生成」拆成可叠加的能力模块，是 2026 年通用交互世界模型的代表。</span></p>
+</div>
+
+<p class="paper"><b>AlayaWorld：Long-Horizon and Playable Video World Generation（2026）</b>（<a href="https://arxiv.org/abs/2607.06291">2607.06291</a>）<br>
+<code class="recipe">autoregressive-video(world + action/prompt) -&gt; next-video + CE / interaction</code><br>
+<span class="idea"><span class="p">问题</span> 传统游戏世界制作昂贵、难定制；<span class="p">方法</span> 用长时视频世界模型生成可玩的开放世界，支持导航 + prompt 驱动动作；<span class="p">核心</span> 把「生成式世界」当游戏开发新范式，强调长时 playable 而非短片段。</span></p>
+
+<p class="paper"><b>Wonder：Video World Model Done Better（2026）</b>（<a href="https://arxiv.org/abs/2607.26037">2607.26037</a>）<br>
+<code class="recipe">streaming-diffusion(image/video + camera) -&gt; next-frame + flow / revisit-memory</code><br>
+<span class="idea"><span class="p">问题</span> 相机可控世界模型在长轨迹上会丢一致性、不能稳定重访；<span class="p">方法</span> 用更好记忆 / 相机条件，生成分钟级 16FPS 的探索世界，支持回到看过的区域；<span class="p">核心</span> 直接对标「实时、相机可控、可重访」三件事，是视频世界模型做交互探索的新 SOTA 尝试。</span></p>
+
+<h3>2.5 具身 / 机器人世界模型（2023-2026）</h3>
+<p class="trend">这一块把世界模型放进机器人：用视频扩散 / 潜状态 / 3D 表示预测动作后果，再用想象生成数据、训练或评估策略。代表有 UniPi（策略即视频）、RoboDreamer / VidMan / EnerVerse（视频扩散做操控）、DreMa / PointWorld（显式 3D / 组合世界模型）、LaDi-WM / FLARE / Cosmos Policy（隐式或视频策略对齐），以及 2026 年的 DreamDojo、τ0-WM、World-VLA-Loop 把「世界模型 + VLA 策略」做成闭环。核心矛盾是动作精度和长期一致性：视频好看不代表机器人能抓住，闭环 RL / 3D 几何 / 组合拆解都在修这一点。</p>
+
+<p class="paper"><b>UniPi：Learning Universal Policies via Text-Guided Video Generation（Du et al. 2023）</b>（<a href="https://arxiv.org/abs/2302.00111">2302.00111</a>）<br>
+<code class="recipe">text-to-video(observation + instruction) -&gt; future-video + inverse-dynamics</code><br>
+<span class="idea"><span class="p">问题</span> 机器人策略怎么复用视频生成模型的通用知识；<span class="p">方法</span> 把决策写成「生成未来视频」，再用逆动力学从视频恢复动作；<span class="p">核心</span> 提出「策略即视频生成」，是视频世界模型做机器人决策的早期范式。</span></p>
+
+<p class="paper"><b>RoboDreamer：Learning Compositional World Models for Robot Imagination（Zhou et al. 2024）</b>（<a href="https://arxiv.org/abs/2404.12377">2404.12377</a>）<br>
+<code class="recipe">diffusion(video + language) -&gt; future-video + composition / flow</code><br>
+<span class="idea"><span class="p">问题</span> 机器人世界模型难泛化到没见过的任务组合；<span class="p">方法</span> 把指令分解成 primitive 组件，组合生成未来视频，辅助规划和数据增强；<span class="p">核心</span> 用「组合性」让机器人想象力覆盖未见任务。</span></p>
+
+<p class="paper"><b>VidMan：Exploiting Implicit Dynamics from Video Diffusion Model（Wen et al. 2024）</b>（<a href="https://arxiv.org/abs/2411.09153">2411.09153</a>）<br>
+<code class="recipe">video-diffusion(observation) -&gt; future-video + dynamics-modulated action</code><br>
+<span class="idea"><span class="p">问题</span> 视频扩散模型里的动力学没被显式用到机器人控制；<span class="p">方法</span> 两阶段训练：先视频预测学隐动力学，再加轻量动作模块把动力学调制成动作；<span class="p">核心</span> 从视频扩散模型中「提取隐式动力学」做操控，CALVIN 等任务显著提升。</span></p>
+
+<p class="paper"><b>EnerVerse：Envisioning Embodied Future Space for Robotics Manipulation（2025）</b>（<a href="https://arxiv.org/abs/2501.01895">2501.01895</a>）<br>
+<code class="recipe">chunkwise-video-diffusion(instruction) -&gt; future-space + sparse-memory / 4D</code><br>
+<span class="idea"><span class="p">问题</span> 长时机器人操控需要边预测未来、边记住关键历史；<span class="p">方法</span> chunk-wise 自回归视频扩散 + 稀疏上下文记忆，生成可展开的 embodied future space；<span class="p">核心</span> 把未来空间建模和记忆机制结合，服务长时操控规划。</span></p>
+
+<p class="paper"><b>DreMa：Dream to Manipulate（Barcellona et al. 2024）</b>（<a href="https://arxiv.org/abs/2412.14957">2412.14957</a>）<br>
+<code class="recipe">3dgs-composition(object + action) -&gt; future-scene + reconstruction / dynamics</code><br>
+<span class="idea"><span class="p">问题</span> 传统世界模型不显式建模物体 / 动力学，难做组合泛化；<span class="p">方法</span> 用可学习显式表示（3DGS + 动力学）自动建数字孪生，想象新物体组合和动作后果；<span class="p">核心</span> 把组合世界模型变成机器人数据引擎，真机任务提升明显。</span></p>
+
+<p class="paper"><b>LaDi-WM：A Latent Diffusion-based World Model for Predictive Manipulation（2025）</b>（<a href="https://arxiv.org/abs/2505.11528">2505.11528</a>）<br>
+<code class="recipe">latent-diffusion(video + action) -&gt; future-latent + flow / predictive</code><br>
+<span class="idea"><span class="p">问题</span> 高保真预测操控未来状态仍是难点；<span class="p">方法</span> 在 latent 空间做动作条件扩散，预测未来状态并用于策略；<span class="p">核心</span> 在预测精度与生成质量之间做权衡，是 latent 扩散世界模型做操控的代表。</span></p>
+
+<p class="paper"><b>FLARE：Robot Learning with Implicit World Modeling（2025）</b>（<a href="https://arxiv.org/abs/2505.15659">2505.15659</a>）<br>
+<code class="recipe">dit(observation) -&gt; future-latent + policy alignment</code><br>
+<span class="idea"><span class="p">问题</span> 显式视频世界模型很贵，机器人策略能否只做隐式世界建模；<span class="p">方法</span> 把扩散 Transformer 特征与未来观测潜表征对齐，让策略内部学会预测；<span class="p">核心</span> 用「隐式世界建模」替代显式视频预测，兼顾速度与规划信息。</span></p>
+
+<div class="deep">
+<p class="paper"><b>PointWorld：Scaling 3D World Models for In-The-Wild Robotic Manipulation（2026）</b>（<a href="https://arxiv.org/abs/2601.03782">2601.03782</a>）<br>
+<code class="recipe">3d-point-flow(rgb-d + action) -&gt; future-points + point-flow / CE</code><br>
+<span class="idea"><span class="p">问题</span> 2D 视频世界模型缺 3D 几何，难直接服务真机操控；<span class="p">方法</span> 把状态和动作统一成 3D point flow，从 RGB-D 和低维动作预测未来点云；<span class="p">核心</span> 用大规模 3D 世界模型统一预测与动作，是 3D 具身世界模型的尺度化代表。</span></p>
+</div>
+
+<p class="paper"><b>DreamDojo：A Generalist Robot World Model from Large-Scale Human Videos（2026）</b>（<a href="https://arxiv.org/abs/2602.06949">2602.06949</a>）<br>
+<code class="recipe">video-wm(human-video + action) -&gt; future-video + next-token / flow</code><br>
+<span class="idea"><span class="p">问题</span> 机器人动作标注稀缺，怎么用海量人类视频学世界模型；<span class="p">方法</span> 在 44,000 小时第一人称人类视频上预训练通用机器人世界模型；<span class="p">核心</span> 用「人视频」替代「机器人视频」扩大世界模型数据，是 scale 路线的重要一步。</span></p>
+
+<p class="paper"><b>τ0-WM：A Unified Video-Action World Model for Robotic Manipulation（2026）</b>（<a href="https://arxiv.org/abs/2606.01027">2606.01027</a>）<br>
+<code class="recipe">video-action-wm(observation + instruction) -&gt; action + future-video + rollout</code><br>
+<span class="idea"><span class="p">问题</span> 策略学习、视频预测、动作评估被拆成多个模型；<span class="p">方法</span> 统一到一个 future-predictive 框架，同时生成动作和未来视频、评估后果；<span class="p">核心</span> 把「世界模型 + 动作模型」合一，闭环做操控。</span></p>
+
+<p class="paper"><b>Cosmos Policy：Fine-Tuning Video Models for Visuomotor Control and Planning（2026）</b>（<a href="https://arxiv.org/abs/2601.16163">2601.16163</a>）<br>
+<code class="recipe">video-model(video + instruction) -&gt; action + future-video + fine-tune</code><br>
+<span class="idea"><span class="p">问题</span> 怎么把大规模视频模型高效变成视觉运动策略；<span class="p">方法</span> 微调 Cosmos 视频模型，在统一框架里做控制和规划；<span class="p">核心</span> 用世界模型先验加持 VLA，降低多阶段后训练复杂度。</span></p>
+
+<p class="paper"><b>World-VLA-Loop：Closed-Loop Learning of Video World Model and VLA Policy（2026）</b>（<a href="https://arxiv.org/abs/2602.06508">2602.06508</a>）<br>
+<code class="recipe">video-wm + vla -&gt; rollout + closed-loop RL</code><br>
+<span class="idea"><span class="p">问题</span> 真实世界 RL 贵、有风险，视频世界模型又不够准确；<span class="p">方法</span> 让视频世界模型和 VLA 策略闭环互相训练，提高动作跟随；<span class="p">核心</span> 用闭环学习同时改进世界模型和策略，是「世界模型当 RL 环境」的代表。</span></p>
+
+<h3>2.6 自动驾驶世界模型（2023-2026）</h3>
+<p class="trend">这一块要解决的是「用世界模型替代或增强自动驾驶的仿真、感知、规划」。早期 GAIA-1 / DriveDreamer 用视频生成学驾驶动态，OccWorld / Drive-WM / DriveDreamer4D 逐步把世界模型放到 3D 占用 / 多视角 / 4D 空间，GAIA-2 / HERMES / UniFuture 进一步统一理解与生成，2026 年的 OmniDreams / 4D-WAM 则强调实时闭环仿真。核心矛盾是「真实驾驶的动态一致性、多相机一致性和长时闭环」：单条视频好生成，但自动驾驶要用它做反事实和闭环训练，差一步就是事故。</p>
+
+<div class="deep">
+<p class="paper"><b>GAIA-1：A Cutting-Edge Generative AI Model for Autonomy（Wayve 2023）</b>（<a href="https://wayve.ai/thinking/introducing-gaia1/">Wayve blog</a>）<br>
+<code class="recipe">transformer(video + action) -&gt; next-video + next-token / CE</code><br>
+<span class="idea"><span class="p">问题</span> 自动驾驶需要一个可预测未来、可做 what-if 的生成式世界模型；<span class="p">方法</span> 用大规模驾驶视频 + 车辆动作训练 next-token 视频生成，能按天气 / 场景 / 动作生成多未来；<span class="p">核心</span> 把「生成式驾驶世界模型」做成产品方向，是 DriveDreamer / GAIA-2 的源头。</span></p>
+</div>
+
+<p class="paper"><b>DriveDreamer：Towards Real-world-driven World Models for Autonomous Driving（2023）</b>（<a href="https://arxiv.org/abs/2309.09777">2309.09777</a>）<br>
+<code class="recipe">diffusion(video + action) -&gt; future-video + flow / real-world data</code><br>
+<span class="idea"><span class="p">问题</span> 现成驾驶世界模型偏仿真、难覆盖真实复杂场景；<span class="p">方法</span> 用真实驾驶视频 + 结构信息训练扩散世界模型，可控生成未来驾驶视频；<span class="p">核心</span> 开「真实数据驱动驾驶世界模型」的线，后续 DriveDreamer2/4D 都从这长出来。</span></p>
+
+<p class="paper"><b>Drive-WM：Driving into the Future（Wang et al. 2024）</b>（<a href="https://arxiv.org/abs/2311.17918">2311.17918</a>）<br>
+<code class="recipe">multiview-diffusion(video + action) -&gt; future-views + flow / planning</code><br>
+<span class="idea"><span class="p">问题</span> 单视角驾驶世界模型无法服务端到端规划；<span class="p">方法</span> 多视角联合预测未来 + 生成驾驶视频，再用视频训练规划器；<span class="p">核心</span> 证明驾驶世界模型可以反过来提升端到端驾驶策略。</span></p>
+
+<p class="paper"><b>OccWorld：Learning a 3D Occupancy World Model for Autonomous Driving（2023）</b>（<a href="https://arxiv.org/abs/2311.16038">2311.16038</a>）<br>
+<code class="recipe">occupancy(3d + action) -&gt; future-occupancy + next-token / CE</code><br>
+<span class="idea"><span class="p">问题</span> 驾驶世界模型只在像素 / 框层面预测，缺 3D 几何；<span class="p">方法</span> 在 3D 占用空间做自回归世界模型，同时预测未来占用和 ego 运动；<span class="p">核心</span> 把世界模型从 2D 视频推进到 3D 占用，是驾驶 4D 世界模型的奠基。</span></p>
+
+<p class="paper"><b>Vista：A Generalizable Driving World Model（Gao et al. 2024）</b>（<a href="https://arxiv.org/abs/2405.17398">2405.17398</a>）<br>
+<code class="recipe">diffusion(video + action) -&gt; future-video + flow / high-fidelity</code><br>
+<span class="idea"><span class="p">问题</span> 驾驶世界模型要能处理未见环境、保持高保真可控；<span class="p">方法</span> 用高效视频扩散 + 多条件控制，生成高保真、可控、可泛化的驾驶未来；<span class="p">核心</span> 强调「通用可控」的驾驶世界模型，是自动驾驶数据合成的常用 baseline。</span></p>
+
+<p class="paper"><b>DriveDreamer4D：World Models Are Effective Data Machines for 4D Driving Scene Representation（2024）</b>（<a href="https://arxiv.org/abs/2410.13571">2410.13571</a>）<br>
+<code class="recipe">4d-world-model(video + action) -&gt; 4d-scene + flow / reconstruction</code><br>
+<span class="idea"><span class="p">问题</span> 闭环驾驶仿真需要 4D 场景，而现有传感器仿真泛化差；<span class="p">方法</span> 用世界模型生成新轨迹下的 4D 驾驶场景表示，服务闭环仿真；<span class="p">核心</span> 把驾驶世界模型定位成「数据机器」，补足 4D 训练数据缺口。</span></p>
+
+<p class="paper"><b>GAIA-2：A Controllable Multi-View Generative World Model for Autonomous Driving（Wayve 2025）</b>（<a href="https://arxiv.org/abs/2503.20523">2503.20523</a>）<br>
+<code class="recipe">latent-diffusion(multiview + action) -&gt; future-views + flow / multi-agent</code><br>
+<span class="idea"><span class="p">问题</span> 驾驶世界模型需要多相机一致、多智能体交互、细粒度控制；<span class="p">方法</span> 用 latent diffusion 联合建模多视角和多智能体动态，可控生成未来；<span class="p">核心</span> 把 GAIA 升级成多视角可控生成世界模型，接近自动驾驶生成仿真底座。</span></p>
+
+<p class="paper"><b>HERMES：A Unified Self-Driving World Model for Simultaneous 3D Scene Understanding and Generation（2025）</b>（<a href="https://arxiv.org/abs/2501.14729">2501.14729</a>）<br>
+<code class="recipe">unified-transformer(video + action) -&gt; 3d-understanding + future-generation + CE / flow</code><br>
+<span class="idea"><span class="p">问题</span> 现有驾驶世界模型只生成不「理解」，规划仍缺语义；<span class="p">方法</span> 统一模型同时做 3D 场景理解和未来生成，共享表示；<span class="p">核心</span> 把「理解 + 生成」合一，是驾驶世界模型的重要集成范式。</span></p>
+
+<p class="paper"><b>UniFuture：A 4D Driving World Model for Future Generation and Perception（2025）</b>（<a href="https://arxiv.org/abs/2503.13587">2503.13587</a>）<br>
+<code class="recipe">4d-wm(video + action) -&gt; future-video + perception + flow</code><br>
+<span class="idea"><span class="p">问题</span> 2D 生成和静态感知都偏科，缺统一 4D 未来建模；<span class="p">方法</span> 把外观与几何联合建模，同时生成未来视频和未来感知结果；<span class="p">核心</span> 让 4D 驾驶世界模型同时服务仿真和感知，是「预测未来」的主线代表。</span></p>
+
+<div class="deep">
+<p class="paper"><b>NVIDIA OmniDreams：Real-Time Generative World Model for Closed-Loop AV Simulation（2026）</b>（<a href="https://arxiv.org/abs/2606.03159">2606.03159</a>）<br>
+<code class="recipe">generative-wm(multiview + action) -&gt; sensor-future + closed-loop sim</code><br>
+<span class="idea"><span class="p">问题</span> 安全评价需要实时闭环、策略动作可反馈的自动驾驶模拟器；<span class="p">方法</span> 实时生成多视角传感器未来，让驾驶策略动作直接更新模拟器状态；<span class="p">核心</span> 把世界模型从「离线视频」推到「实时闭环 AV 仿真」，直击安全评测瓶颈。</span></p>
+</div>
+
+<p class="paper"><b>4D-WAM：4D Consistent World Modeling for Autonomous Driving（2026）</b>（<a href="https://arxiv.org/abs/2608.10107">2608.10107</a>）<br>
+<code class="recipe">4d-wam(video + action) -&gt; future-scene + trajectory + flow</code><br>
+<span class="idea"><span class="p">问题</span> 用 2D 视频训练的世界动作模型理解不了底层 4D 场景；<span class="p">方法</span> 把驾驶场景建模和轨迹规划放到 4D 一致表示里，统一生成与决策；<span class="p">核心</span> 从 2D 视频世界模型升级到 4D 世界动作模型，改善几何与长时一致。</span></p>
+
+<h3>2.7 评测 / 基准（2025-2026，最近一年主线）</h3>
+<p class="trend">这一块解决的是「世界模型到底怎么评」：旧指标 FID / FVD 只看画质，漏掉物理一致性、动作跟随、长时记忆和闭环决策。WorldGym / WorldEval 把世界模型当机器人策略评估器，WorldLens 用五轴全谱评估驾驶世界模型，Omni-WorldBench / WorldRoamBench / WorldExam / PlayWorld 进一步把评估推到交互、长时目标、开放世界和外观到反应性。核心矛盾是「单条视频好看 ≠ 世界模型有用」：闭环、反事实、agent 玩法、物理反应成了新关键词。</p>
+
+<p class="paper"><b>WorldGym：World Model as An Environment for Policy Evaluation（2025）</b>（<a href="https://arxiv.org/abs/2506.00613">2506.00613</a>）<br>
+<code class="recipe">action-conditioned-video(obs + action) -&gt; rollout + VLM-reward / success</code><br>
+<span class="idea"><span class="p">问题</span> 真机评测贵、手工仿真器不通用；<span class="p">方法</span> 用世界模型当代理环境，自动生成 rollout，配合 VLM 给奖励评测策略成功率；<span class="p">核心</span> 世界模型可直接当策略评估器，且与真机成功率有较强相关性。</span></p>
+
+<p class="paper"><b>WorldEval：World Model as Real-World Robot Policies Evaluator（2025）</b>（<a href="https://arxiv.org/abs/2505.19017">2505.19017</a>）<br>
+<code class="recipe">wm(video + action) -&gt; rollout + task-success / evaluator</code><br>
+<span class="idea"><span class="p">问题</span> 通用机器人策略评测受环境变化、任务规模限制；<span class="p">方法</span> 用世界模型替真机做策略评估，覆盖更多任务和条件；<span class="p">核心</span> 把世界模型当作可扩展的机器人策略评测器，减少真实实验成本。</span></p>
+
+<p class="paper"><b>WorldLens：Full-Spectrum Evaluations of Driving World Models in Real World（2025）</b>（<a href="https://arxiv.org/abs/2512.10958">2512.10958</a>）<br>
+<code class="recipe">benchmark(driving-video) -&gt; 5-axis fidelity + reconstruction / action-following</code><br>
+<span class="idea"><span class="p">问题</span> 驾驶世界模型各测各的，画质 / 几何 / 行为 / 偏好没统一；<span class="p">方法</span> 五轴全谱评估：视觉保真、4D 重建、动作跟随、人类偏好等；<span class="p">核心</span> 给出驾驶世界模型的全谱测评，暴露「好看但不懂世界」的短板。</span></p>
+
+<p class="paper"><b>Omni-WorldBench：Towards a Comprehensive Interaction-Centric Evaluation for World Models（2026）</b>（<a href="https://arxiv.org/abs/2603.22212">2603.22212</a>）<br>
+<code class="recipe">benchmark(interaction) -&gt; multi-dim eval + action / memory / physics</code><br>
+<span class="idea"><span class="p">问题</span> 现有评测偏视觉、不交互，不能反映世界模型在闭环里的能力；<span class="p">方法</span> 以交互为中心设计综合基准，覆盖多维度；<span class="p">核心</span> 把评测重心从「生成」转向「交互」，是交互式世界模型评测的代表。</span></p>
+
+<p class="paper"><b>WorldRoamBench：An Open-World Benchmark for Long-Horizon Stability of Interactive World Models（2026）</b>（<a href="https://arxiv.org/abs/2606.31672">2606.31672</a>）<br>
+<code class="recipe">benchmark(open-world roaming) -&gt; action/memory/physics/geometry + long-horizon</code><br>
+<span class="idea"><span class="p">问题</span> 现有 benchmark 忽略记忆和交互物理，只看动作轨迹；<span class="p">方法</span> 在开放世界漫游 10-60 秒，评估动作、记忆、物理、几何四维；<span class="p">核心</span> 专门抓「长时间稳定」和「物体恒存 / 记忆」这些传统指标漏掉的盲区。</span></p>
+
+<p class="paper"><b>WorldExam：Benchmarking World Models from Apparent Appearance to Inherent Reactivity（2026）</b>（<a href="https://arxiv.org/abs/2608.02603">2608.02603</a>）<br>
+<code class="recipe">benchmark(camera/action/language) -&gt; 4 levels / 8 tasks + reactivity</code><br>
+<span class="idea"><span class="p">问题</span> 世界模型评测要区分「外观像」和「会反应」；<span class="p">方法</span> 1,474 个案例、8 类任务，统一支持相机 / 动作 / 语言三种范式，从外观到内在反应分四级；<span class="p">核心</span> 提出「从外观到反应性」的分层测评，逼出世界模型的真实物理理解。</span></p>
+
+<p class="paper"><b>PlayWorld：Benchmarking World Models with Agent Players over Long-Horizon Objectives（2026）</b>（<a href="https://arxiv.org/abs/2608.13552">2608.13552</a>）<br>
+<code class="recipe">benchmark(agent play) -&gt; long-horizon goal success + gameplay</code><br>
+<span class="idea"><span class="p">问题</span> 人评世界模型主观、不可扩展；<span class="p">方法</span> 让 agent 玩家在生成世界里追求长期目标，用目标完成度自动评估；<span class="p">核心</span> 用「可玩的长期目标」替代片段打分，更接近世界模型作为环境的真实用途。</span></p>
+
+<h2>3. 共识与分歧（速记版）</h2>
+<p><b>共识：</b></p>
+<ol>
+<li>世界模型的核心 = <b>从观测（通常 + 动作）预测未来</b>；但「在哪预测、要不要重建像素、怎么用」三件事分出了不同流派。</li>
+<li><b>潜状态 / MBRL</b> 和 <b>生成式视频</b> 两条线在合流：Dreamer / RSSM 的样本效率 + DiT / 扩散的画质，共同推向具身与驾驶。</li>
+<li><b>动作条件</b> 是「模拟器」和「视频生成器」的分水岭：只有动作可控，才能做规划、反事实和闭环训练。</li>
+<li><b>闭环评测</b> 正在取代 FID / FVD：长时记忆、物理一致性、动作跟随、策略成功率成为新共识。</li>
+<li>JEPA 证明 <b>不重建像素也能学世界模型</b>，并给出更便宜的预测表征。</li>
+</ol>
+<p><b>分歧 / 难点：</b></p>
+<ol>
+<li><b>重建像素 vs 预测表征</b>：生成派要保真、JEPA 派要语义，前者贵、后者不好直接看，尚未统一。</li>
+<li><b>2D 视频 vs 3D / 4D</b>：视频够直观，但几何、遮挡、物体永久性常崩；3DGS / occupancy 更准但难 scale。</li>
+<li><b>长时一致性</b>：误差随 rollout 指数累积，记忆压缩、几何状态、蒸馏 / 流式训练都在治，但还没有通解。</li>
+<li><b>评价本身</b>：单条视频、闭环、agent 玩法、反事实各有标准，跨范式不可直接比。</li>
+<li><b>「世界模拟器」是否名实相符</b>：Sora 这类视频模型到底懂了物理，还是只背了视觉统计，仍有争议。</li>
+<li><b>数据与动作标注</b>：互联网视频无动作标签，机器人 / 驾驶有动作但规模小，怎么互相补是最现实瓶颈。</li>
+<li><b>安全与可部署性</b>：世界模型幻觉、反事实偏差、实时延迟，在驾驶 / 机器人安全场景仍是红线。</li>
+</ol>
+
+<hr>
+<p class="note">说明：本文先读了 4 篇 survey 建立分类（Ding et al. 2411.14499「理解 vs 预测」；Zhu et al. 2405.03520「Sora 是不是世界模拟器」；Li et al. 2510.16732「具身世界模型三轴」；Zidan et al. 2606.00133「架构 / 方法 / 推理 / 应用四轴」），再交叉引用 Awesome World Model 清单与 arXiv 检索补齐最近一年论文。经典论文用 arXiv / venue 链接；Sora、GAIA-1、Oasis 等为官方 blog / 项目页；Genie 2/3、Odyssey/Luma 等厂商产品未独立发表技术报告，未单列条目。文中标题、编号与日期均以 arXiv / 官方页面为准；`recipe` 的「预测 + 目标」按世界模型约定写为「输出/结论 + 训练目标或机制」。世界模型更新极快，后续可优先补：Cosmos 3 的独立评测、Genie 3 / Odyssey 若公开技术细节、以及更多闭环 agent-play 基准。</p>
+
+</main>
+
+<script src="../assets/js/main.js" defer></script>
+</body>
+</html>

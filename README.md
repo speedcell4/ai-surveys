@@ -12,6 +12,7 @@
 - [递归自我改进速览](surveys/recursive-self-improvement.html) — 自训练 / 自奖励 / 自博弈 / 自纠正 / 弱到强 + AI Scientist、AlphaEvolve，2003 ~ 2026，27 篇
 - [LLM 强化学习速览](surveys/llm-rl.html) — GRPO → GSPO/GEPO → DAPO + credit assignment + GKD/OPD/OPSD/MOPD，2017 ~ 2026，23 篇
 - [Agent Harness 速览](surveys/agent-harness.html) — Codex / Claude Code / Kimi Code / Pi / DeepSeek + SWE-agent、Harness-1 等，2023 ~ 2026，19 篇
+- [世界模型速览](surveys/world-models.html) — MBRL 潜状态世界模型、Sora / Genie / Cosmos 视频世界模型、JEPA、交互式 / 具身 / 驾驶世界模型与评测，2018 ~ 2026，68 篇
 
 > 新增论文/续写速览前，先读 [AGENTS.md](AGENTS.md)，里面是这套「配方 + 一句话」格式的完整规范。
 
