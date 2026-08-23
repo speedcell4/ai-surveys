@@ -39,209 +39,362 @@ li { margin:.35em 0; }
 <body>
 <main class="container">
 
-<h1>长上下文速览（Long Context，2023 ~ 2026）</h1>
-<p class="sub">从「attention sink」到「稀疏注意力」· 重点看架构与算法设计 · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话（问题 / 方法 / 核心）</p>
+<h1>长上下文速览（Long Context，2020 ~ 2026）</h1>
+<p class="sub">一条主线：从「注意力算不起长序列」到「怎么又准又便宜地用满 64K → 1M」· 每篇 = 配方 + 一句话（问题 / 方法 / 核心）· 检索时间 2026-08-23</p>
 
 <h2>0. 记法（这个领域的「最大公约数」）</h2>
-<p>长上下文的核心矛盾是：<b>注意力是 O(n²) 的、且 KV 缓存随长度线性增长</b>。所以所有方法都在回答三件事——注意力怎么做、KV 怎么管、长度怎么外推。配方围绕这三轴：</p>
+<p>长上下文要同时回答四件事：<b>注意力怎么算</b>（复杂度）、<b>KV 怎么存</b>（显存）、<b>长度怎么外推</b>（位置编码）、<b>怎么客观测出真实长度</b>（benchmark）。配方围绕这四轴：</p>
 <table>
 <tr><th>记号</th><th>意思</th></tr>
-<tr><td><code>dense</code></td><td>全注意力（每个 token 看所有历史），O(n²)</td></tr>
-<tr><td><code>sparse</code></td><td>稀疏注意力：滑窗 + 全局/检索/block，子平方复杂度</td></tr>
-<tr><td><code>linear</code></td><td>线性注意力 / SSM，O(n)</td></tr>
-<tr><td><code>gated</code></td><td>在注意力输出上加门控（非线性 + 稀疏）</td></tr>
-<tr><td><code>evict</code></td><td>KV 驱逐：按分数/规则丢掉不重要的 KV</td></tr>
+<tr><td><code>dense</code></td><td>全注意力（每 token 看所有历史），O(n²)，精确但贵</td></tr>
+<tr><td><code>sparse</code></td><td>稀疏注意力：滑窗 / 全局 / 随机 / block / landmark / 检索，子平方</td></tr>
+<tr><td><code>linear / ssm</code></td><td>线性注意力 / 状态空间模型，O(n)，详见 <a href="linear-sparse-attention.html">linear-sparse-attention.html</a></td></tr>
+<tr><td><code>flash / paged</code></td><td>不改变数学、只优化实现：IO 感知（FlashAttention）/ 分页 KV（PagedAttention）</td></tr>
+<tr><td><code>evict / compress</code></td><td>KV 驱逐 / 压缩：按分数丢掉不重要的 KV，省显存</td></tr>
 <tr><td><code>sink</code></td><td>attention sink：保留/学习几个「吸收注意力」的 sink token</td></tr>
-<tr><td><code>rope / yarn / hope / alibi</code></td><td>位置编码与外推：RoPE / YaRN / HoPE / ALiBi</td></tr>
+<tr><td><code>rope / alibi / pi / yarn / hope</code></td><td>位置编码与外推：RoPE / ALiBi / Position Interpolation / YaRN / HoPE</td></tr>
+<tr><td><code>niah</code></td><td>needle-in-a-haystack：在长文本里塞一根「针」测检索，最常用但被批「高估」的合成测法</td></tr>
 </table>
-<p>配方格式：<code>模型: &lt;注意力&gt; -&gt; &lt;上下文/复杂度&gt; [KV·位置机制]</code>。例：<code>StreamingLLM: dense -&gt; 无限流式 [sink + 滑窗]</code>。</p>
+<p>配方格式：<code>模型: &lt;注意力/复杂度&gt; -&gt; &lt;上下文/成本&gt; [关键机制]</code>。例：<code>StreamingLLM: dense -&gt; 无限流式 [sink + 滑窗]</code>。</p>
 
-<h2>1. 主线：一条「attention sink」的兴衰史</h2>
+<h2>1. 主线：五条并行的战线，最后都指向「混合」</h2>
 <ol>
-<li><b>2023 发现</b>：StreamingLLM 发现「attention sink」——初始几个 token 会吸收大量注意力，直接滑窗会崩；H2O 发现注意力是重尾的，可以驱逐大部分 KV。</li>
-<li><b>2025 解决</b>：OpenAI GPT-OSS 把 sink 做成内置可训练参数；Qwen3-Next 的 Gated Attention 用门控直接消除 sink（sink-free）。sink 从「要绕开的问题」变成「设计选项」。</li>
-<li><b>2025-2026 之后</b>：sink 不再是瓶颈，注意力转向「原生稀疏注意力」——NSA / MoBA / HiLS 等，把稀疏性做成端到端可训练、硬件对齐，追求 64K → 1M → 16M 上下文。</li>
+<li><b>算得起（复杂度）</b>：dense O(n²) 太贵 → 稀疏注意力（Sparse Transformer / Longformer / BigBird）→ 硬件高效实现（FlashAttention）→ 原生稀疏（NSA / HiLS）。</li>
+<li><b>存得下（显存）</b>：KV 缓存随长度线性涨 → 分页管理（PagedAttention）→ 驱逐/压缩（H2O / SnapKV / DMC / YoCo）。</li>
+<li><b>够得着（外推）</b>：RoPE 直接外推会崩 → Position Interpolation → YaRN / LongRoPE / Self-Extend / PoSE，把 4K 模型外推到 128K/1M。</li>
+<li><b>绕得过（sink）</b>：StreamingLLM 发现 attention sink 是个「bug」→ GPT-OSS 内置 sink 参数、Gated Attention 门控消除 sink。</li>
+<li><b>测得准（评测）</b>：needle-in-haystack → LongBench / RULER / InfiniteBench / HELMET，从「找得到」走向「想得清」。</li>
 </ol>
-<p>三条并行轴：<b>注意力复杂度</b>（dense → sparse → linear）、<b>KV 记忆</b>（full → evict → sparse-access）、<b>长度外推</b>（RoPE → YaRN/HoPE → sink-free）。</p>
+<p>三条并行轴在收敛：<b>注意力复杂度</b>（dense → sparse → linear → hybrid）、<b>KV 记忆</b>（full → evict → compress → sparse-access）、<b>长度外推</b>（RoPE → PI → YaRN/HoPE → sink-free）。交点是一个开放问题：<b>长上下文到底靠「便宜的压缩」（线性/驱逐）还是「贵的精确」（稀疏/全注意力）？</b> 2025 起的答案是「混合」。</p>
 
-<h2>2. Attention Sink 专章（核心叙事）</h2>
+<h2>2. 源头与地基（2020-2023：先让长序列「算得动」）</h2>
+<p class="trend">在「上下文窗口」成为卖点之前，第一代工作只求一件事：让注意力在长序列上<b>跑得动</b>。两条腿：一是稀疏化注意力（Sparse Transformer、Reformer、Longformer、BigBird），二是优化实现而不改数学（FlashAttention 1/2/3、PagedAttention）。这一代的遗产是——「注意力不必是 O(n²)」，为后面所有稀疏/线性路线铺路。</p>
 
-<p class="trend">长上下文研究的第一章其实是「发现并解决一个 bug」。2023 年 StreamingLLM 发现 attention sink——softmax 让最初几个 token 吸收大量注意力，只保留滑窗会崩；H2O 则发现注意力分数是重尾的、少数 heavy-hitter 贡献大部分注意力。两个发现把「sink 必须处理」立成共识，此后的工作要么绕开它、要么解决它。本节把 sink 讲清楚：它是什么、怎么被发现，又怎么在 2025 年被 GPT-OSS（内置可训练 sink 参数）和 Gated Attention（门控直接消除 sink）两个方向分别「收编」。</p>
+<p class="paper"><b>Sparse Transformer</b>（<a href="https://arxiv.org/abs/1904.10509">1904.10509</a>，Child et al. 2019）<br>
+<code class="recipe">sparse(strided + fixed) -&gt; O(n√n) [稀疏注意力分解]</code><br>
+<span class="idea"><span class="p">问题</span> 注意力时间/显存随长度平方涨；<span class="p">方法</span> 把注意力矩阵分解成 strided（跨步）和 fixed（固定局部）两种稀疏模式，复杂度降到 O(n√n)；<span class="p">核心</span> 稀疏注意力的开山，最早把长序列（图像/音频/文本）做成可行。</span></p>
+
+<p class="paper"><b>Reformer</b>（<a href="https://arxiv.org/abs/2001.04451">2001.04451</a>，Kitaev et al. 2020）<br>
+<code class="recipe">sparse(LSH) + reversible -&gt; O(n log n) [局部敏感哈希 + 可逆残差]</code><br>
+<span class="idea"><span class="p">问题</span> 全注意力在长序列上算不动、且要存激活；<span class="p">方法</span> 用局部敏感哈希（LSH）只让相似 token 互相注意，配可逆残差省激活内存；<span class="p">核心</span> 「哈希近似注意力」路线，复杂度 O(n log n)。</span></p>
+
+<p class="paper"><b>Longformer</b>（<a href="https://arxiv.org/abs/2004.05150">2004.05150</a>，Beltagy et al. 2020）<br>
+<code class="recipe">sparse(滑窗 + 全局 + 膨胀) -&gt; O(n) [三种稀疏模式组合]</code><br>
+<span class="idea"><span class="p">问题</span> 长文档（数千 token）放不进全注意力；<span class="p">方法</span> 组合滑动窗口、任务相关的全局 token、膨胀窗口三种稀疏模式；<span class="p">核心</span> O(n) 复杂度，成为长文档 NLP 的常用底座。</span></p>
+
+<p class="paper"><b>BigBird</b>（<a href="https://arxiv.org/abs/2007.14062">2007.14062</a>，Zaheer et al. 2020）<br>
+<code class="recipe">sparse(随机 + 滑窗 + 全局) -&gt; O(n) [随机图 + 局部 + 全局]</code><br>
+<span class="idea"><span class="p">问题</span> 稀疏注意力凭什么能替代全注意力；<span class="p">方法</span> 用随机、滑窗、全局三类边的稀疏图，并给出理论（稀疏注意力在图灵完备性上的等价刻画）；<span class="p">核心</span> 既省算力又给出理论保证，稀疏注意力的代表性理论工作。</span></p>
 
 <div class="deep">
-<p class="paper"><b>StreamingLLM：Efficient Streaming Language Models with Attention Sinks</b>（<a href="https://arxiv.org/abs/2309.17453">2309.17453</a>，ICLR 2024）<br>
-<code class="recipe">StreamingLLM: dense -&gt; 无限流式 [sink + 滑动窗口]</code><br>
-<span class="idea"><span class="p">问题</span> 流式推理时只保留最近 token 的滑窗会崩、质量骤降；<span class="p">方法</span> 发现「attention sink」——初始几个 token 吸收大量注意力（softmax 的副产品），保留这几个 sink token + 最近 token 即可无限流式；<span class="p">核心</span> 首次命名 attention sink，奠定「sink 必须留」的认知。</span></p>
+<p class="paper"><b>FlashAttention</b>（<a href="https://arxiv.org/abs/2205.14135">2205.14135</a>，Dao et al. 2022）<br>
+<code class="recipe">flash -&gt; 更快 + 省显存 + 精确 [IO 感知 + 分块 tiling]</code><br>
+<span class="idea"><span class="p">问题</span> 注意力瓶颈不在算力而在「显存读写」（IO），且近似方法省了算力却换不来墙钟加速；<span class="p">方法</span> 用 tiling 分块、不物化 N×N 注意力矩阵、在线 softmax，把注意力做成 IO 感知；<span class="p">核心</span> 精确（不近似）却更快更省，GPT-2 上快 7.6×，成为所有长上下文实现的默认底座。</span></p>
+</div>
+
+<p class="paper"><b>FlashAttention-2</b>（<a href="https://arxiv.org/abs/2307.08691">2307.08691</a>，Dao 2023）<br>
+<code class="recipe">flash -&gt; ~2× 再提速 [更好的并行 + 工作划分]</code><br>
+<span class="idea"><span class="p">问题</span> FlashAttention 在 GPU 上并行度、工作划分还有浪费；<span class="p">方法</span> 减少非 matmul 操作、沿序列维度并行、更好的 warp 工作划分；<span class="p">核心</span> 训练吞吐约再翻倍，达到 A100 上 230 TFLOPs/s。</span></p>
+
+<p class="paper"><b>FlashAttention-3</b>（<a href="https://arxiv.org/abs/2407.08608">2407.08608</a>，Shah et al. 2024）<br>
+<code class="recipe">flash -&gt; Hopper 异步 + FP8 [wgmma 异步 + 低精度]</code><br>
+<span class="idea"><span class="p">问题</span> 前两代没用上 Hopper 的新能力（异步、低精度）；<span class="p">方法</span> 用异步 wgmma、跨 warp 重叠 softmax 与 matmul、FP8 低精度；<span class="p">核心</span> H100 上 740 TFLOPs/s（约 75% 峰值利用），再快 1.5-2×。</span></p>
+
+<div class="deep">
+<p class="paper"><b>PagedAttention / vLLM</b>（<a href="https://arxiv.org/abs/2309.06180">2309.06180</a>，Kwon et al. 2023）<br>
+<code class="recipe">paged -&gt; 显存利用率大幅提升 [像 OS 虚拟内存一样分页 KV]</code><br>
+<span class="idea"><span class="p">问题</span> KV 缓存每请求动态增减，按连续块分配会碎片化、浪费显存；<span class="p">方法</span> 把 KV 切成固定大小的 page、像虚拟内存一样按需映射，消除碎片和预留冗余；<span class="p">核心</span> 吞吐提升 2-4×，长上下文服务的显存管理范式，几乎所有推理框架都借鉴。</span></p>
+</div>
+
+<h2>3. Attention Sink 专章（核心叙事）</h2>
+<p class="trend">长上下文研究的第一章其实是「发现并解决一个 bug」。StreamingLLM 发现 attention sink——softmax 让最初几个 token 吸收大量注意力，只留滑窗会崩；H2O 发现注意力分数是重尾的、少数 heavy-hitter 贡献大部分注意力。两个发现把「sink 必须处理」立成共识，此后的工作要么绕开它、要么解决它。本节把 sink 讲清楚：它是什么、怎么被发现，又怎么在 2025 年被 GPT-OSS（内置可训练 sink 参数）和 Gated Attention（门控直接消除 sink）两个方向分别「收编」。</p>
+
+<p class="paper"><b>Sinkformers（Doubly Stochastic Attention）</b>（<a href="https://arxiv.org/abs/2110.11773">2110.11773</a>，2021）<br>
+<code class="recipe">sink(Sinkhorn) -&gt; 长序列稳定 [双随机注意力]</code><br>
+<span class="idea"><span class="p">问题</span> softmax 只做行归一化，注意力的「吸收」分布不对称、长序列易崩；<span class="p">方法</span> 用 Sinkhorn 算法把注意力矩阵变成行、列都归一化的双随机矩阵；<span class="p">核心</span> 「sink」这个词在注意力语境里的早期出现，为后来的 attention sink 分析埋下伏笔。</span></p>
+
+<div class="deep">
+<p class="paper"><b>StreamingLLM（Efficient Streaming LMs with Attention Sinks）</b>（<a href="https://arxiv.org/abs/2309.17453">2309.17453</a>，Xiao et al. 2023，ICLR 2024）<br>
+<code class="recipe">dense -&gt; 无限流式 [sink token + 滑动窗口]</code><br>
+<span class="idea"><span class="p">问题</span> 流式推理只保留最近 token 的滑窗会崩、PPL 骤升；<span class="p">方法</span> 发现「attention sink」——softmax 的副产品让最初几个 token 吸收大量注意力，保留这几个 sink token + 最近 token 即可无限流式、不重训；<span class="p">核心</span> 首次命名 attention sink、给出「4 个 sink + 滑窗」即可流式这一经验规律，奠定「sink 必须留」的共识。</span></p>
 </div>
 
 <div class="deep">
-<p class="paper"><b>H2O：Heavy-Hitter Oracle for Efficient Generative Inference</b>（<a href="https://arxiv.org/abs/2306.14048">2306.14048</a>，NeurIPS 2023）<br>
-<code class="recipe">H2O: dense -&gt; KV 压缩 [evict 非 heavy-hitter]</code><br>
-<span class="idea"><span class="p">问题</span> KV cache 随长度线性增长、撑爆显存；<span class="p">方法</span> 发现注意力分数是重尾的——少数「heavy hitter」token 贡献大部分注意力，保留它们 + 最近 token、驱逐其余；<span class="p">核心</span> KV 驱逐派的开山之作，带理论保证。</span></p>
+<p class="paper"><b>H2O（Heavy-Hitter Oracle）</b>（<a href="https://arxiv.org/abs/2306.14048">2306.14048</a>，Zhang et al. 2023，NeurIPS 2023）<br>
+<code class="recipe">evict -&gt; KV 压缩 20× [保留 heavy-hitter + 最近 token]</code><br>
+<span class="idea"><span class="p">问题</span> KV 缓存随长度线性增长、撑爆显存；<span class="p">方法</span> 发现注意力分数是重尾的——少数 heavy-hitter token 贡献大部分注意力，据此动态驱逐、只保留 heavy-hitter 和最近 token；<span class="p">核心</span> KV 驱逐派的开山，带理论保证，是 SnapKV/PyramidKV 等后续工作的起点。</span></p>
 </div>
+
+<p class="paper"><b>Massive Activations in LLMs</b>（<a href="https://arxiv.org/abs/2402.17762">2402.17762</a>，Sun et al. 2024）<br>
+<code class="recipe">analysis -&gt; sink 的机理刻画 [巨量激活的定位与来源]</code><br>
+<span class="idea"><span class="p">问题</span> LLM 里少数激活值异常巨大（可达其他 10 万倍），原因和后果不明；<span class="p">方法</span> 系统定位 massive activation 出现的位置，发现它们与 attention sink（初始 token、特定分隔符）强相关；<span class="p">核心</span> 把 sink 现象和「巨量激活」连起来，解释了为什么 sink 会影响量化和训练稳定性。</span></p>
 
 <div class="deep">
 <p class="paper"><b>GPT-OSS（OpenAI 开源模型，2025-08）</b>（<a href="https://huggingface.co/openai/gpt-oss-120b">HF</a>）<br>
-<code class="recipe">GPT-OSS: dense + 内置 sink -&gt; 128K [trainable sink 参数]</code><br>
-<span class="idea"><span class="p">问题</span> sink 一直被当成「要绕开的 bug」，各家用 workaround；<span class="p">方法</span> 把 attention sink 做成模型内置、可训练的一等参数（soft_max_add_sinks），20B/120B MoE、128K 上下文；<span class="p">核心</span> sink 从「问题」变成「设计特性」，标志着它被正式接纳并解决。</span></p>
+<code class="recipe">dense + 内置 sink -&gt; 128K [trainable sink 参数]</code><br>
+<span class="idea"><span class="p">问题</span> sink 一直被当「要绕开的 bug」，各家各用 workaround；<span class="p">方法</span> 把 attention sink 做成模型内置、可训练的一等参数（soft_max_add_sinks），20B/120B MoE、128K 上下文；<span class="p">核心</span> sink 从「问题」变成「设计特性」，标志着它被正式接纳。</span></p>
 </div>
 
 <div class="deep">
-<p class="paper"><b>Gated Attention：Non-linearity, Sparsity, and Attention-Sink-Free</b>（<a href="https://arxiv.org/abs/2505.06708">2505.06708</a>，NeurIPS 2025，Qwen3-Next）<br>
-<code class="recipe">Gated Attention: gated -&gt; sink-free [head 级 sigmoid gate]</code><br>
-<span class="idea"><span class="p">问题</span> sink 与 massive activation 一起损害训练稳定性和长上下文外推；<span class="p">方法</span> 在 SDPA 之后加 head 级 sigmoid 门控，引入非线性 + 稀疏性，直接消除 attention sink；<span class="p">核心</span> 「sink-free」：不用再特殊照顾 sink，还顺带提升长上下文外推，Qwen3-Next 已采用。</span></p>
+<p class="paper"><b>Gated Attention（Non-linearity, Sparsity, Sink-Free）</b>（<a href="https://arxiv.org/abs/2505.06708">2505.06708</a>，Yang et al. 2025，NeurIPS 2025，Qwen3-Next）<br>
+<code class="recipe">gated -&gt; sink-free [head 级 sigmoid 门控 + QK-Norm]</code><br>
+<span class="idea"><span class="p">问题</span> sink 与 massive activation 一起损害训练稳定性和长上下文外推；<span class="p">方法</span> 在 SDPA 之后加 head 级 sigmoid 门控，引入非线性 + 稀疏性，配合零中心 QK-Norm，直接消除 attention sink；<span class="p">核心</span> 「sink-free」：不再需要特殊照顾 sink，还顺带提升长上下文外推，被 Qwen3-Next 采用。</span></p>
 </div>
 
-<h2>3. 稀疏注意力（2024-2026，sink 之后的主战场）</h2>
+<h2>4. 稀疏注意力（2023-2026，sink 之后的主战场）</h2>
+<p class="trend">sink 不再卡脖子之后，主战场转向<b>原生稀疏注意力</b>：把稀疏性做成端到端可训练、硬件对齐，去冲 64K → 1M → 16M。核心矛盾是「怎么选才又准、又便宜、又可训练」——早期靠手工规则（Landmark、MInference），后来靠 MoE 式 block 路由（MoBA）、学出来的阈值（SeerAttention）、可切换 dense↔sparse（InfLLM-v2），直到层级 landmark + 端到端检索分数（HiLS）。这条线与 <a href="linear-sparse-attention.html">linear-sparse-attention.html</a> 的稀疏章呼应。</p>
 
-<p class="trend">sink 不再卡脖子之后，主战场转向<b>原生稀疏注意力</b>：不再纠结 sink，而是把稀疏性做成端到端可训练、硬件对齐，去冲 64K → 1M → 16M 上下文。核心矛盾是「怎么选才又准、又便宜、又可训练」——早期靠手工规则（Landmark、MInference），后来靠 MoE 式 block 路由（MoBA）、学出来的阈值（SeerAttention）、可切换的 dense↔sparse（InfLLM-v2），直到层级 landmark + 端到端检索分数（HiLS）。这条线与 <a href="linear-sparse-attention.html">linear-sparse-attention.html</a> 的稀疏章呼应。</p>
+<p class="paper"><b>RingAttention（Blockwise Transformers）</b>（<a href="https://arxiv.org/abs/2310.01889">2310.01889</a>，Liu et al. 2023，ICLR 2024）<br>
+<code class="recipe">dense(分块环形) -&gt; 近无限上下文 [分布式分块注意力]</code><br>
+<span class="idea"><span class="p">问题</span> 长序列单卡放不下、注意力矩阵爆炸；<span class="p">方法</span> 序列分块、按环在设备间传递 KV，块间做注意力，训练可并行；<span class="p">核心</span> 用分布式分块把 dense 注意力扩到百万级，是长上下文分布式训练的底座。</span></p>
 
-<p class="paper"><b>Landmark Attention（Random-Access Infinite Context）</b>（<a href="https://arxiv.org/abs/2305.16300">2305.16300</a>，NeurIPS 2023）<br>
-<code class="recipe">Landmark: sparse(landmark) -&gt; 无限上下文 [检索式随机访问]</code><br>
+<p class="paper"><b>Landmark Attention（Random-Access Infinite Context）</b>（<a href="https://arxiv.org/abs/2305.16300">2305.16300</a>，Mohtashami &amp; Jaggi 2023）<br>
+<code class="recipe">sparse(landmark) -&gt; 无限上下文 [检索式随机访问]</code><br>
 <span class="idea"><span class="p">问题</span> 全注意力算不了无限长；<span class="p">方法</span> 每个 block 用 landmark token 做代表，query 先检索相关 block 再做局部注意力；<span class="p">核心</span> 检索式稀疏注意力的早期代表。</span></p>
 
-<p class="paper"><b>RingAttention with Blockwise Transformers</b>（<a href="https://arxiv.org/abs/2310.01889">2310.01889</a>，ICLR 2024）<br>
-<code class="recipe">RingAttention: dense(分块环形) -&gt; 近无限上下文 [分布式分块注意力]</code><br>
-<span class="idea"><span class="p">问题</span> 长序列单卡放不下、注意力矩阵爆炸；<span class="p">方法</span> 把序列分块、按环在设备间传递 KV，块与块之间做注意力；<span class="p">核心</span> 用「分布式分块」把 dense 注意力扩到百万级长度。</span></p>
+<p class="paper"><b>MInference（Dynamic Sparse Attention）</b>（<a href="https://arxiv.org/abs/2407.02490">2407.02490</a>，Jiang et al. 2024）<br>
+<code class="recipe">sparse(动态) -&gt; 10× 预填充加速 [免训动态稀疏模式]</code><br>
+<span class="idea"><span class="p">问题</span> 长上下文预填充太慢；<span class="p">方法</span> 免训识别 A-shape / Vertical-Slash / Block-Sparse 三种注意力稀疏模式并据此计算；<span class="p">核心</span> 不训练、动态稀疏，prefill 加速一个数量级。</span></p>
 
-<p class="paper"><b>MInference（Dynamic Sparse Attention）</b>（<a href="https://arxiv.org/abs/2407.02490">2407.02490</a>，2024）<br>
-<code class="recipe">MInference: sparse(动态) -&gt; 10× 加速 [免训的动态稀疏模式]</code><br>
-<span class="idea"><span class="p">问题</span> 长上下文预填充太慢；<span class="p">方法</span> 免训练地识别 A-shape / Vertical-Slash / Block-Sparse 三种动态稀疏模式并据此计算；<span class="p">核心</span> 不训练、动态稀疏，prefill 加速一个数量级。</span></p>
+<p class="paper"><b>NSA（Native Sparse Attention，DeepSeek）</b>（<a href="https://arxiv.org/abs/2502.11089">2502.11089</a>，Yuan et al. 2025，ACL 2025）<br>
+<code class="recipe">sparse(压缩 + 选择 + 滑窗) -&gt; 64K 原生可训练 [硬件对齐三路并行]</code><br>
+<span class="idea"><span class="p">问题</span> 稀疏注意力要么不可原生训练、要么硬件不友好；<span class="p">方法</span> token 压缩、token 选择、滑窗三路并行，统一成硬件对齐算子，端到端训练；<span class="p">核心</span> 「原生稀疏 + 硬件对齐」成为这条线的标杆。</span></p>
 
-<p class="paper"><b>NSA（Native Sparse Attention，DeepSeek）</b>（<a href="https://arxiv.org/abs/2502.11089">2502.11089</a>，ACL 2025）<br>
-<code class="recipe">NSA: sparse(压缩+选择+滑窗) -&gt; 64K [原生可训练 + 硬件对齐]</code><br>
-<span class="idea"><span class="p">问题</span> 稀疏注意力要么不可原生训练、要么硬件不友好；<span class="p">方法</span> 三路并行——token 压缩、token 选择、滑动窗口——统一成硬件对齐的算子，原生端到端训练；<span class="p">核心</span> 「原生稀疏 + 硬件对齐」成为这条线的标杆。</span></p>
+<p class="paper"><b>MoBA（Mixture of Block Attention，Kimi）</b>（<a href="https://arxiv.org/abs/2502.13189">2502.13189</a>，2025）<br>
+<code class="recipe">sparse(block 路由) -&gt; 10M 上下文 [MoE 式 block 选择]</code><br>
+<span class="idea"><span class="p">问题</span> 稀疏注意力怎么又高效又选对块；<span class="p">方法</span> 把 MoE 路由搬到注意力，每个 query 只路由到少数相关 block；<span class="p">核心</span> 「注意力也 MoE 化」，Kimi 跑到 10M 上下文。</span></p>
 
-<p class="paper"><b>MoBA（Mixture of Block Attention，Moonshot/Kimi）</b>（<a href="https://arxiv.org/abs/2502.13189">2502.13189</a>）<br>
-<code class="recipe">MoBA: sparse(block 路由) -&gt; 10M [MoE 式 block 选择]</code><br>
-<span class="idea"><span class="p">问题</span> 稀疏注意力怎么既高效又能选对 block；<span class="p">方法</span> 把 MoE 的路由思想搬到注意力：每个 query 只路由到少数相关 block；<span class="p">核心</span> 「注意力也 MoE 化」，Kimi 跑到 10M 上下文。</span></p>
+<p class="paper"><b>SeerAttention</b>（<a href="https://arxiv.org/abs/2410.13276">2410.13276</a>，2025）<br>
+<code class="recipe">sparse(learned) -&gt; 90% 稀疏 [端到端学注意力阈值]</code><br>
+<span class="idea"><span class="p">问题</span> 手工稀疏规则不通用；<span class="p">方法</span> 让模型端到端学习「哪些注意力该保留」的阈值；<span class="p">核心</span> 「学出来的稀疏」而非手工设计。</span></p>
 
-<p class="paper"><b>SeerAttention（Learning Intrinsic Sparse Attention）</b>（<a href="https://arxiv.org/abs/2410.13276">2410.13276</a>，2025）<br>
-<code class="recipe">SeerAttention: sparse(学习式) -&gt; 90% 稀疏 [端到端学注意力阈值]</code><br>
-<span class="idea"><span class="p">问题</span> 手工稀疏规则不通用；<span class="p">方法</span> 让模型端到端学习「哪些注意力该保留」的阈值，达到内在稀疏；<span class="p">核心</span> 「学出来的稀疏」而非手工设计。</span></p>
-
-<p class="paper"><b>InfLLM-v2（Dense-Sparse Switchable Attention）</b>（<a href="https://arxiv.org/abs/2509.24663">2509.24663</a>）<br>
-<code class="recipe">InfLLM-v2: dense↔sparse 可切换 -&gt; 短长自适应 [语义块检索]</code><br>
-<span class="idea"><span class="p">问题</span> 短上下文要 dense、长上下文要 sparse，二者难兼得；<span class="p">方法</span> dense/sparse 可切换的注意力，短时全注意力、长时检索稀疏；<span class="p">核心</span> 无缝短到长自适应。</span></p>
+<p class="paper"><b>InfLLM-v2（Dense-Sparse Switchable）</b>（<a href="https://arxiv.org/abs/2509.24663">2509.24663</a>，2025）<br>
+<code class="recipe">sparse↔dense 可切换 -&gt; 短长自适应 [语义块检索]</code><br>
+<span class="idea"><span class="p">问题</span> 短上下文要 dense、长上下文要 sparse，难兼得；<span class="p">方法</span> dense/sparse 可切换，短时全注意力、长时检索稀疏；<span class="p">核心</span> 无缝短到长自适应。</span></p>
 
 <div class="deep">
-<p class="paper"><b>HiLS Attention：Hierarchical Sparse Attention Done Right（种子论文）</b>（<a href="https://arxiv.org/abs/2607.02980">2607.02980</a>，2026）<br>
-<code class="recipe">HiLS: sparse(层级 landmark) -&gt; 64× 外推 [端到端 chunk 检索]</code><br>
-<span class="idea"><span class="p">问题</span> 现有 chunk-wise 稀疏注意力 chunk 选不准、追不上 full attention；<span class="p">方法</span> 层级 landmark 稀疏：query 先对各 chunk 独立算注意力提取 chunk 信息，再按检索分数融合，检索分数直接进前向、用 LM loss 端到端优化；<span class="p">核心</span> 检索分数可端到端学习、原生稀疏训练，64× 外推仍有 90% 检索准确率，现有 full-attention 模型轻量续训即可转换。</span></p>
+<p class="paper"><b>HiLS Attention（Hierarchical Sparse Attention Done Right）</b>（<a href="https://arxiv.org/abs/2607.02980">2607.02980</a>，2026，种子论文）<br>
+<code class="recipe">sparse(层级 landmark) -&gt; 64× 外推 [端到端 chunk 检索]</code><br>
+<span class="idea"><span class="p">问题</span> 现有 chunk-wise 稀疏注意力 chunk 选不准、追不上 full attention；<span class="p">方法</span> query 先对各 chunk 独立算注意力提取 chunk 信息，再按检索分数融合，检索分数直接进前向、用 LM loss 端到端优化；<span class="p">核心</span> 检索分数可端到端学习、原生稀疏训练，64× 外推仍有 90% 检索准确率，现有 full-attention 模型轻量续训即可转换。</span></p>
 </div>
 
-<p class="paper"><b>DashAttention（Differentiable Adaptive Sparse Hierarchical Attention）</b>（<a href="https://arxiv.org/abs/2605.18753">2605.18753</a>）<br>
-<code class="recipe">DashAttention: sparse(可微层级) -&gt; 长上下文 [可微自适应稀疏]</code><br>
+<p class="paper"><b>DashAttention（Differentiable Adaptive Sparse Hierarchical）</b>（<a href="https://arxiv.org/abs/2605.18753">2605.18753</a>，2026）<br>
+<code class="recipe">sparse(可微层级) -&gt; 长上下文 [可微自适应稀疏]</code><br>
 <span class="idea"><span class="p">问题</span> 层级稀疏注意力不够可微、选择不够自适应；<span class="p">方法</span> 可微 + 自适应的层级稀疏注意力；<span class="p">核心</span> 把稀疏选择做进可微框架。</span></p>
 
-<p class="paper"><b>NOSA（Native and Offloadable Sparse Attention）</b>（<a href="https://arxiv.org/abs/2510.13602">2510.13602</a>）<br>
-<code class="recipe">NOSA: sparse(原生+可卸载) -&gt; 超长上下文 [可 offload 到 CPU]</code><br>
-<span class="idea"><span class="p">问题</span> 超长上下文的 KV 显存放不下；<span class="p">方法</span> 原生稀疏注意力 + 支持把不活跃 KV offload 到 CPU；<span class="p">核心</span> 稀疏 + 卸载，突破显存上限。</span></p>
+<p class="paper"><b>NOSA（Native and Offloadable Sparse Attention）</b>（<a href="https://arxiv.org/abs/2510.13602">2510.13602</a>，2025）<br>
+<code class="recipe">sparse(原生 + 可卸载) -&gt; 超长上下文 [KV offload 到 CPU]</code><br>
+<span class="idea"><span class="p">问题</span> 超长上下文的 KV 显存放不下；<span class="p">方法</span> 原生稀疏注意力 + 把不活跃 KV offload 到 CPU；<span class="p">核心</span> 稀疏 + 卸载，突破显存上限。</span></p>
 
-<p class="paper"><b>MiniMax Sparse Attention</b>（<a href="https://arxiv.org/abs/2606.13392">2606.13392</a>）<br>
-<code class="recipe">MiniMax SA: sparse(块+局部) -&gt; 超长上下文 [层次化块稀疏]</code><br>
-<span class="idea"><span class="p">问题</span> 稀疏注意力在真实长文本上仍不稳；<span class="p">方法</span> 层次化块稀疏 + 局部窗口，训练与推理都稀疏；<span class="p">核心</span> 工业级稀疏注意力的落地。</span></p>
+<p class="paper"><b>MiniMax Sparse Attention</b>（<a href="https://arxiv.org/abs/2606.13392">2606.13392</a>，2026）<br>
+<code class="recipe">sparse(块 + 局部) -&gt; 十万到百万 token [层次化块稀疏]</code><br>
+<span class="idea"><span class="p">问题</span> agentic / 仓库级代码 / 持久记忆要求几十万到百万 token 联合注意力，softmax 部署不起；<span class="p">方法</span> blockwise 稀疏 + 局部窗口，训练推理都稀疏；<span class="p">核心</span> 工业级稀疏注意力的落地。</span></p>
 
-<h2>4. KV 驱逐 / 压缩（H2O 之后的演进）</h2>
-<p class="trend">H2O 开了「驱逐不重要的 KV」这条路，后面主要争三件事：重要性判得准不准、预算按层怎么分、判断开销多低。代表分别是观察窗口投票（SnapKV）、浅层多留深层少留的金字塔预算（PyramidKV）、只用 query 做近零开销估计（Quest）。核心矛盾是「越省越不准」，所以这条免训路线长期活在推理加速里，而不是训练侧。</p>
+<h2>5. KV 驱逐 / 压缩（显存这条线）</h2>
+<p class="trend">H2O 开了「驱逐不重要的 KV」这条路，后面争三件事：重要性判得准不准、预算按层怎么分、判断开销多低。代表分别是观察窗口投票（SnapKV）、金字塔层自适应预算（PyramidKV）、只用 query 的近零开销估计（Quest）。再往深走是「压缩」而非「驱逐」——DMC 把 token 合并进固定 slot、YoCo 干脆只缓存一次 KV。核心矛盾是「越省越不准」，所以这条免训路线长期活在推理加速里。</p>
 
-<p class="paper"><b>SnapKV</b>（<a href="https://arxiv.org/abs/2404.14469">2404.14469</a>）<br>
-<code class="recipe">SnapKV: evict -&gt; KV 压缩 [观察窗口投票选重要 KV]</code><br>
-<span class="idea"><span class="p">问题</span> H2O 的逐 token 分数不稳定；<span class="p">方法</span> 用一个「观察窗口」在 prompt 末尾统一投票选出最重要的 KV；<span class="p">核心</span> 免训、稳定的 KV 压缩。</span></p>
+<p class="paper"><b>Scissorhands（Persistence of Importance）</b>（<a href="https://arxiv.org/abs/2305.17118">2305.17118</a>，Liu et al. 2023）<br>
+<code class="recipe">evict -&gt; KV 压缩到 5% [重要性持续假设]</code><br>
+<span class="idea"><span class="p">问题</span> 长上下文 KV 显存大；<span class="p">方法</span> 提出「重要性持续」假设——重要的 token 在后续生成里保持重要，据此只保留少数关键 token；<span class="p">核心</span> 把 KV 压到 5%、显存降到 20% 以内，且不影响生成质量。</span></p>
 
-<p class="paper"><b>PyramidKV</b>（<a href="https://arxiv.org/abs/2406.02069">2406.02069</a>）<br>
-<code class="recipe">PyramidKV: evict -&gt; 金字塔式 KV [浅层留多、深层留少]</code><br>
-<span class="idea"><span class="p">问题</span> 每层 KV 重要性不同、却用同一预算；<span class="p">方法</span> 按「浅层多留、深层少留」的金字塔分配 KV 预算；<span class="p">核心</span> 层自适应预算。</span></p>
+<p class="paper"><b>FastGen（Model Tells You What to Discard）</b>（<a href="https://arxiv.org/abs/2310.01801">2310.01801</a>，Ge et al. 2023）<br>
+<code class="recipe">evict(自适应) -&gt; 免训 KV 压缩 [四种注意力模式画像]</code><br>
+<span class="idea"><span class="p">问题</span> 手工 KV 压缩不通用；<span class="p">方法</span> 对注意力做 profiling，识别标点、局部、特殊 token 等四种模式，据此自适应压缩；<span class="p">核心</span> 免训练的即插即用压缩，把 KV 显存大幅降下来。</span></p>
 
-<p class="paper"><b>Quest</b>（<a href="https://arxiv.org/abs/2406.10774">2406.10774</a>）<br>
-<code class="recipe">Quest: evict -&gt; 低开销压缩 [用 Q 做重要性估计]</code><br>
+<p class="paper"><b>SnapKV</b>（<a href="https://arxiv.org/abs/2404.14469">2404.14469</a>，Li et al. 2024）<br>
+<code class="recipe">evict -&gt; 稳定 KV 压缩 [观察窗口投票]</code><br>
+<span class="idea"><span class="p">问题</span> H2O 的逐 token 分数不稳定；<span class="p">方法</span> 用一个「观察窗口」在 prompt 末尾统一投票选出最重要的 KV；<span class="p">核心</span> 免训、稳定的 KV 压缩，成为长上下文推理的常用件。</span></p>
+
+<p class="paper"><b>PyramidKV</b>（<a href="https://arxiv.org/abs/2406.02069">2406.02069</a>，2024）<br>
+<code class="recipe">evict -&gt; 层自适应预算 [浅层留多、深层留少]</code><br>
+<span class="idea"><span class="p">问题</span> 每层 KV 重要性不同却用同一预算；<span class="p">方法</span> 按「浅层多留、深层少留」的金字塔分配 KV 预算；<span class="p">核心</span> 层自适应预算，同预算下比均分更准。</span></p>
+
+<p class="paper"><b>Quest</b>（<a href="https://arxiv.org/abs/2406.10774">2406.10774</a>，2024）<br>
+<code class="recipe">evict -&gt; 近零开销压缩 [用 Q 做重要性估计]</code><br>
 <span class="idea"><span class="p">问题</span> 现有驱逐要算满注意力分数、开销高；<span class="p">方法</span> 只用量化后的 query 做重要性估计，绕过完整注意力；<span class="p">核心</span> 近零开销的 KV 驱逐。</span></p>
 
-<h2>5. 位置编码 / 长度外推</h2>
-<p class="trend">另一条路不动注意力、只改位置编码，让训练时 4K 的模型直接外推到 128K/1M。演进是：RoPE 立起旋转位置的标准 → YaRN 用 NTK 频率缩放 + 温度修正让外推不崩 → LongRoPE 用进化搜索非均匀缩放冲到 2048K → HoPE 去掉低频分量、从理论打破长期衰减。核心矛盾是「外推得越远、短上下文精度越受损」。</p>
+<p class="paper"><b>DMC（Dynamic Memory Compression）</b>（<a href="https://arxiv.org/abs/2403.09636">2403.09636</a>，Nawrot et al. 2024）<br>
+<code class="recipe">compress -&gt; 固定预算内存 [每步决定合并或追加]</code><br>
+<span class="idea"><span class="p">问题</span> KV 缓存随长度线性涨；<span class="p">方法</span> 在每层每步动态决定「合并进已有 slot」还是「追加新 slot」，把内存压进固定预算，经轻量续训 retrofit 到预训练模型；<span class="p">核心</span> 「压缩」而非「丢弃」，保留聚合信息。</span></p>
 
-<p class="paper"><b>RoPE（Rotary Position Embedding）</b>（<a href="https://arxiv.org/abs/2104.09864">2104.09864</a>）<br>
-<code class="recipe">RoPE: 旋转位置编码 -&gt; 相对位置 [复数旋转]</code><br>
-<span class="idea"><span class="p">问题</span> 绝对位置编码难表达相对距离；<span class="p">方法</span> 用旋转矩阵把位置编码进 QK 内积；<span class="p">核心</span> 现代 LLM 默认位置编码，长上下文研究的起点。</span></p>
+<p class="paper"><b>YoCo（You Only Cache Once）</b>（<a href="https://arxiv.org/abs/2405.05254">2405.05254</a>，Sun et al. 2024）<br>
+<code class="recipe">compress -&gt; 只缓存一次 KV [self-decoder + cross-decoder]</code><br>
+<span class="idea"><span class="p">问题</span> 常规 decoder 每层都缓存一份 KV；<span class="p">方法</span> decoder-decoder 架构：self-decoder 编码全局 KV 只缓存一次，cross-decoder 通过交叉注意力复用；<span class="p">核心</span> 显存和预填充大幅下降，且可扩展到 1M token。</span></p>
 
-<p class="paper"><b>ALiBi</b>（<a href="https://arxiv.org/abs/2108.12409">2108.12409</a>）<br>
-<code class="recipe">ALiBi: 线性偏置 -&gt; 免训外推 [相对距离惩罚]</code><br>
-<span class="idea"><span class="p">问题</span> 位置编码外推能力差；<span class="p">方法</span> 给注意力加「随距离线性衰减」的偏置，不学位置编码；<span class="p">核心</span> 零外推成本的早期方案。</span></p>
+<p class="paper"><b>CacheGen</b>（<a href="https://arxiv.org/abs/2310.07240">2310.07240</a>，Liu et al. 2023）<br>
+<code class="recipe">compress -&gt; KV 流式传输 [量化 + 算术编码]</code><br>
+<span class="idea"><span class="p">问题</span> 跨请求复用 KV 时，KV 传输带宽成为瓶颈；<span class="p">方法</span> 用自定义量化 + 算术编码把 KV 压缩后流式传输；<span class="p">核心</span> 把 KV 传输带宽降下来，加速长上下文的首次 token 时间。</span></p>
 
-<p class="paper"><b>YaRN</b>（<a href="https://arxiv.org/abs/2309.00071">2309.00071</a>）<br>
-<code class="recipe">YaRN: RoPE 频率缩放 -&gt; 128K 外推 [NTK + 温度]</code><br>
-<span class="idea"><span class="p">问题</span> RoPE 直接外推会崩；<span class="p">方法</span> NTK-aware 频率缩放 + 注意力温度修正；<span class="p">核心</span> 主流的免训/微调外推方案。</span></p>
+<p class="paper"><b>GemFilter（Discovering the Gems in Early Layers）</b>（<a href="https://arxiv.org/abs/2409.17422">2409.17422</a>，2024）<br>
+<code class="recipe">evict(前层过滤) -&gt; 1000× 输入压缩 [前层注意力挑「宝石」token]</code><br>
+<span class="idea"><span class="p">问题</span> 长上下文输入里大部分 token 无关紧要；<span class="p">方法</span> 用早期层的注意力挑出少量关键 token（约 1%），后面的层只处理这些；<span class="p">核心</span> 千倍级输入压缩，预填充和显存都大降。</span></p>
 
-<p class="paper"><b>LongRoPE</b>（<a href="https://arxiv.org/abs/2402.13753">2402.13753</a>）<br>
-<code class="recipe">LongRoPE: 非均匀频率 -&gt; 2048K 外推 [进化搜索旋转角]</code><br>
-<span class="idea"><span class="p">问题</span> 均匀缩放频率损失短上下文精度；<span class="p">方法</span> 用进化搜索找非均匀的旋转角缩放；<span class="p">核心</span> 首次外推到 2048K。</span></p>
+<p class="paper"><b>Loki（Low-rank Keys for Sparse Attention）</b>（<a href="https://arxiv.org/abs/2406.02542">2406.02542</a>，2024）<br>
+<code class="recipe">sparse(低秩 key) -&gt; 稀疏注意力加速 [低秩重构 QK]</code><br>
+<span class="idea"><span class="p">问题</span> 稀疏注意力的选择计算本身也贵；<span class="p">方法</span> 用低秩分解近似 key，降低选 token 的开销；<span class="p">核心</span> 让「先选再算」的稀疏注意力更便宜。</span></p>
+
+<p class="paper"><b>CompressKV（Semantic Retrieval Heads）</b>（<a href="https://arxiv.org/abs/2508.02401">2508.02401</a>，2025）<br>
+<code class="recipe">evict(GQA 感知) -&gt; 生成前就知谁不重要 [语义检索头]</code><br>
+<span class="idea"><span class="p">问题</span> 大多数压缩方法把所有注意力头一视同仁地逐 token 启发式驱逐；<span class="p">方法</span> 识别「语义检索头」，在生成前就知道哪些 token 不重要，做 GQA 感知的压缩；<span class="p">核心</span> 从「事后启发式」变「事前语义判断」。</span></p>
+
+<h2>6. 位置编码 / 长度外推</h2>
+<p class="trend">另一条路不动注意力、只改位置编码，让训练时 4K 的模型直接外推到 128K/1M。演进是：RoPE 立起旋转位置标准 → ALiBi 用线性偏置免训外推 → Position Interpolation 线性缩放位置、微调 1000 步到 32K → YaRN 用 NTK 频率缩放 + 温度修正让外推不崩 → LongRoPE 进化搜索非均匀缩放冲到 2048K → Self-Extend / PoSE 追求免训或低成本外推。核心矛盾是「外推得越远、短上下文精度越受损」。</p>
+
+<p class="paper"><b>RoPE（Rotary Position Embedding）</b>（<a href="https://arxiv.org/abs/2104.09864">2104.09864</a>，Su et al. 2021）<br>
+<code class="recipe">rope -&gt; 相对位置 [复数旋转编码]</code><br>
+<span class="idea"><span class="p">问题</span> 绝对位置编码难表达相对距离；<span class="p">方法</span> 用旋转矩阵把位置编码进 QK 内积，天然带相对距离；<span class="p">核心</span> 现代 LLM 默认位置编码，长上下文外推研究的起点。</span></p>
+
+<p class="paper"><b>ALiBi（Train Short, Test Long）</b>（<a href="https://arxiv.org/abs/2108.12409">2108.12409</a>，Press et al. 2021）<br>
+<code class="recipe">alibi -&gt; 免训外推 [线性距离偏置]</code><br>
+<span class="idea"><span class="p">问题</span> 位置编码外推能力差；<span class="p">方法</span> 给注意力加「随距离线性衰减」的偏置，不学位置编码；<span class="p">核心</span> 零外推成本，最早系统论证「外推」这件事。</span></p>
+
+<div class="deep">
+<p class="paper"><b>Position Interpolation（PI）</b>（<a href="https://arxiv.org/abs/2306.15595">2306.15595</a>，Chen et al. 2023）<br>
+<code class="recipe">pi -&gt; 微调 1000 步到 32K [位置线性缩放]</code><br>
+<span class="idea"><span class="p">问题</span> RoPE 直接外推到训练长度之外会崩；<span class="p">方法</span> 把目标长度按比例线性压缩回训练区间（位置做线性插值），再少量微调；<span class="p">核心</span> 长上下文外推的开山，证明「小步微调 + 位置插值」即可把 LLaMA 从 2K 拉到 32K，后续 YaRN/LongRoPE 都在此基础上改进。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>YaRN（Yet another RoPE extensioN）</b>（<a href="https://arxiv.org/abs/2309.00071">2309.00071</a>，Peng et al. 2023）<br>
+<code class="recipe">yarn -&gt; 128K 外推 [NTK 频率缩放 + 注意力温度]</code><br>
+<span class="idea"><span class="p">问题</span> PI 线性缩放会破坏高频、丢短上下文精度；<span class="p">方法</span> 用 NTK-aware 非均匀缩放频率（低频多缩、高频少缩）+ 注意力温度修正；<span class="p">核心</span> 免训/微调外推的主流方案，成为 Code Llama 等开源模型的外推默认件。</span></p>
+</div>
+
+<p class="paper"><b>LongRoPE</b>（<a href="https://arxiv.org/abs/2402.13753">2402.13753</a>，Ding et al. 2024）<br>
+<code class="recipe">rope(非均匀) -&gt; 2048K 外推 [进化搜索旋转角]</code><br>
+<span class="idea"><span class="p">问题</span> 均匀缩放频率损失短上下文精度；<span class="p">方法</span> 用进化搜索找非均匀的旋转角缩放；<span class="p">核心</span> 首次把上下文外推到 2048K（2M）。</span></p>
+
+<p class="paper"><b>Self-Extend（LLM Maybe LongLM）</b>（<a href="https://arxiv.org/abs/2401.01325">2401.01325</a>，Jin et al. 2024）<br>
+<code class="recipe">rope(免训) -&gt; 外推 [分组 + 邻居 floor 除法]</code><br>
+<span class="idea"><span class="p">问题</span> 外推通常要微调，能不能免训；<span class="p">方法</span> 用 floor 除法把远距离位置映射回训练区间，配分组注意力，完全免训；<span class="p">核心</span> 零成本外推，揭示 LLM 自身已具备部分长上下文能力。</span></p>
+
+<p class="paper"><b>PoSE（Positional Skip-wise Training）</b>（<a href="https://arxiv.org/abs/2309.10400">2309.10400</a>，Zhu et al. 2023）<br>
+<code class="recipe">rope(skip-wise) -&gt; 解耦训练/目标长度 [跳跃式位置训练]</code><br>
+<span class="idea"><span class="p">问题</span> 外推到目标长度要全长度微调、成本高；<span class="p">方法</span> 用「跳跃式」位置分布训练，让训练长度和最终目标长度解耦；<span class="p">核心</span> 小成本把上下文扩到 128K，且微调长度内性能更好。</span></p>
+
+<p class="paper"><b>ABF（Adjusting Base Frequency）</b>（<a href="https://arxiv.org/abs/2401.07879">2401.07879</a>，Xiong et al. 2024）<br>
+<code class="recipe">rope(基频) -&gt; 外推 [调大 RoPE base]</code><br>
+<span class="idea"><span class="p">问题</span> RoPE 外推需要正确的基频；<span class="p">方法</span> 分析并调大 RoPE 的 base frequency；<span class="p">核心</span> 外推训练的关键超参，补充了「为什么某些外推能成」的分析。</span></p>
 
 <p class="paper"><b>HoPE（High-frequency rotary Position Encoding）</b>（<a href="https://aclanthology.org/2025.acl-long.1123/">ACL 2025</a>）<br>
-<code class="recipe">HoPE: 只留高频 -&gt; 无长期衰减 [去掉低频分量]</code><br>
-<span class="idea"><span class="p">问题</span> RoPE 的长期衰减让远处 token 交互变弱；<span class="p">方法</span> 只保留 RoPE 的高频分量、去掉低频，从理论上打破长期衰减；<span class="p">核心</span> 位置编码与「长期衰减」解耦。</span></p>
+<code class="recipe">rope(只留高频) -&gt; 无长期衰减 [去掉低频分量]</code><br>
+<span class="idea"><span class="p">问题</span> RoPE 的长期衰减让远处 token 交互变弱；<span class="p">方法</span> 只保留 RoPE 的高频分量、去掉低频，从理论打破长期衰减；<span class="p">核心</span> 位置编码与「长期衰减」解耦。</span></p>
 
-<h2>6. 线性注意力 / SSM（另一条路）</h2>
+<h2>7. 线性注意力 / SSM（另一条路）</h2>
 <p class="trend">不稀疏化、也不驱逐，而是换掉 softmax 注意力本身，把复杂度从 O(n²) 压到 O(n)：RWKV 走 RNN 递推，Mamba 走选择性状态空间，Mamba-2 用 SSD 证明「SSM 和注意力是一家」。这条线的完整演进（DeltaNet / Gated DeltaNet / TTT / Titans，以及 Kimi K3、Qwen3-Next 的混合旗舰）单独成篇，见 <a href="linear-sparse-attention.html">linear-sparse-attention.html</a>。</p>
 
-<p class="paper"><b>RWKV</b>（<a href="https://arxiv.org/abs/2305.13048">2305.13048</a>）<br>
-<code class="recipe">RWKV: linear -&gt; O(n) [RNN 式线性注意力]</code><br>
-<span class="idea"><span class="p">问题</span> Transformer 是 O(n²)；<span class="p">方法</span> 把注意力改成线性（可写成 RNN 递推）；<span class="p">核心</span> O(n) 的 LLM 路线代表。</span></p>
+<p class="paper"><b>RWKV</b>（<a href="https://arxiv.org/abs/2305.13048">2305.13048</a>，Peng et al. 2023）<br>
+<code class="recipe">linear(RNN) -&gt; O(n) [WKV 线性注意力]</code><br>
+<span class="idea"><span class="p">问题</span> Transformer 是 O(n²)；<span class="p">方法</span> 把注意力改成可 RNN 递推的线性形式；<span class="p">核心</span> 独立提出的 O(n) LLM 路线。</span></p>
 
-<p class="paper"><b>Mamba（Selective State Space Model）</b>（<a href="https://arxiv.org/abs/2312.00752">2312.00752</a>）<br>
-<code class="recipe">Mamba: linear(SSM) -&gt; O(n) [输入依赖的选择性状态]</code><br>
-<span class="idea"><span class="p">问题</span> 线性注意力/SSM 表达力弱；<span class="p">方法</span> 让状态转移参数依赖输入（选择性 SSM）；<span class="p">核心</span> 线性复杂度 + 内容感知，SSM 路线的复兴。</span></p>
+<p class="paper"><b>Mamba（Selective SSM）</b>（<a href="https://arxiv.org/abs/2312.00752">2312.00752</a>，Gu &amp; Dao 2023）<br>
+<code class="recipe">ssm(selective) -&gt; O(n) [输入依赖状态转移]</code><br>
+<span class="idea"><span class="p">问题</span> 经典 SSM 转移矩阵固定、表达力弱；<span class="p">方法</span> 让转移参数依赖输入（选择性 SSM）+ 硬件感知算法；<span class="p">核心</span> SSM 路线复兴，线性复杂度 + 内容感知。</span></p>
 
-<h2>7. 训练数据与 Benchmark（单独一节）</h2>
-<p class="trend">长上下文不止是架构问题，也是「用什么数据训、用什么 benchmark 测」的问题。这条线回答：怎么把 4K 的模型训成 128K/1M，以及怎么客观测出真实上下文长度。</p>
+<h2>8. 长上下文训练（怎么把 4K 训成 128K/1M）</h2>
+<p class="trend">长上下文不止是架构问题，也是「用什么数据、怎么低成本地训」的问题。这条线回答：怎么把 4K 的模型续训成 128K/1M，且不花一个完整预训练的钱。核心发现是「长上下文能力大多已在预训练里习得，续训主要是唤起它」——所以关键是数据工程和参数高效微调。</p>
 
-<h3>7.1 长上下文训练</h3>
-<p class="paper"><b>LongLoRA（Efficient Fine-tuning of Long-Context LLMs）</b>（<a href="https://arxiv.org/abs/2309.12307">2309.12307</a>）<br>
-<code class="recipe">LongLoRA: 稀疏局部注意力微调 -&gt; 100K [shifted sparse attention]</code><br>
-<span class="idea"><span class="p">问题</span> 把长上下文模型全量微调太贵；<span class="p">方法</span> 用 shifted sparse attention 做参数高效微调；<span class="p">核心</span> 低成本把 Llama 扩到 100K。</span></p>
+<p class="paper"><b>LongLoRA（Shifted Sparse Attention）</b>（<a href="https://arxiv.org/abs/2309.12307">2309.12307</a>，Chen et al. 2023）<br>
+<code class="recipe">sparse(shifted) -&gt; 100K 低成本微调 [稀疏局部注意力 + LoRA]</code><br>
+<span class="idea"><span class="p">问题</span> 把长上下文模型全量微调太贵；<span class="p">方法</span> 用 shifted sparse attention（分组交替局部窗口）做参数高效微调；<span class="p">核心</span> 低成本把 Llama 扩到 100K，长上下文微调的代表方法。</span></p>
 
-<p class="paper"><b>ABF（Adjusting Base Frequency / YaRN 前的基频调参）</b>（<a href="https://arxiv.org/abs/2401.07879">2401.07879</a>）<br>
-<code class="recipe">ABF: 调 RoPE 基频 -&gt; 外推 [大基频=长波长]</code><br>
-<span class="idea"><span class="p">问题</span> RoPE 外推需要正确基频；<span class="p">方法</span> 分析并调大 RoPE 的 base frequency；<span class="p">核心</span> 外推训练的关键超参。</span></p>
+<p class="paper"><b>LongQLoRA</b>（<a href="https://arxiv.org/abs/2311.04879">2311.04879</a>，Yang et al. 2023）<br>
+<code class="recipe">pi + qlora + shifted -&gt; 单卡 32GB 扩到 8K+ [组合三件套]</code><br>
+<span class="idea"><span class="p">问题</span> 更少资源能不能扩上下文；<span class="p">方法</span> 组合 Position Interpolation + QLoRA + LongLoRA 的 Shift Short Attention；<span class="p">核心</span> 单张 32GB V100 即可把 LLaMA2 7B/13B 从 4096 扩到 8192，再进一步到更长。</span></p>
 
-<p class="paper"><b>OLMo-3 / Dolma3（Allen AI，长上下文续训数据）</b>（<a href="https://huggingface.co/allenai/OLMo-3-1025-7B">HF</a>）<br>
-<code class="recipe">OLMo-3-1025: 续训 -&gt; 长上下文 [Dolma3 长文本语料]</code><br>
-<span class="idea"><span class="p">问题</span> 公开长上下文模型缺透明训练数据；<span class="p">方法</span> 全开源的 7B 长上下文续训模型 + Dolma3 语料；<span class="p">核心</span> 开源长上下文训练的可复现基线（HiLS 等论文的续训底座）。</span></p>
+<div class="deep">
+<p class="paper"><b>Data Engineering for Scaling to 128K</b>（<a href="https://arxiv.org/abs/2402.10171">2402.10171</a>，Fu et al. 2024）<br>
+<code class="recipe">续训(数据工程) -&gt; 128K 位置无关 [长上下文能力已习得]</code><br>
+<span class="idea"><span class="p">问题</span> 怎么高效地把模型续训到 128K；<span class="p">方法</span> 提出「利用任意位置信息的能力大多已在大规模预训练中习得」，续训只需位置感知的数据工程；<span class="p">核心</span> 长上下文续训的数据配方标杆，澄清了「数据 vs 架构」的贡献。</span></p>
+</div>
 
-<h3>7.2 Benchmark</h3>
-<p class="paper"><b>LongBench</b>（<a href="https://arxiv.org/abs/2308.14508">2308.14508</a>）<br>
-<code class="recipe">LongBench: 双语多任务 -&gt; 长上下文理解 [6 类 21 任务]</code><br>
-<span class="idea"><span class="p">问题</span> 缺一个系统的长上下文理解评测；<span class="p">方法</span> 中英双语、单文档/多文档/检索/摘要/代码/合成六类任务；<span class="p">核心</span> 最常用的长上下文理解 benchmark。</span></p>
+<p class="paper"><b>LongRecipe</b>（<a href="https://arxiv.org/abs/2409.00509">2409.00509</a>，Hu et al. 2024）<br>
+<code class="recipe">续训(高效) -&gt; 长上下文泛化 [数据 + 训练 recipe]</code><br>
+<span class="idea"><span class="p">问题</span> 后预训练扩上下文资源密集；<span class="p">方法</span> 给出一套高效 recipe，兼顾数据质量和训练效率；<span class="p">核心</span> 用更少算力获得更好的长上下文泛化。</span></p>
 
-<p class="paper"><b>RULER</b>（<a href="https://arxiv.org/abs/2404.06654">2404.06654</a>）<br>
-<code class="recipe">RULER: 合成检索任务 -&gt; 真实上下文长度 [合成 needle]</code><br>
-<span class="idea"><span class="p">问题</span> 「宣称 128K」和「真能用到 128K」是两回事；<span class="p">方法</span> 用合成检索（变体 needle-in-haystack）测有效上下文长度；<span class="p">核心</span> 揭示大多数模型的实际可用长度远低于宣称值。</span></p>
+<p class="paper"><b>OLMo-3-1025 / Dolma3</b>（<a href="https://huggingface.co/allenai/OLMo-3-1025-7B">HF</a>，Allen AI）<br>
+<code class="recipe">续训 -&gt; 长上下文 [Dolma3 长文本语料]</code><br>
+<span class="idea"><span class="p">问题</span> 公开长上下文模型缺透明训练数据；<span class="p">方法</span> 全开源 7B 长上下文续训模型 + Dolma3 语料；<span class="p">核心</span> 开源长上下文训练的可复现基线，是 HiLS 等论文的续训底座。</span></p>
 
-<p class="paper"><b>L-Eval</b>（<a href="https://arxiv.org/abs/2307.11088">2307.11088</a>）<br>
-<code class="recipe">L-Eval: 长序列评测 -&gt; 多任务 [20 类任务]</code><br>
+<h2>9. Benchmark（单独一节：怎么照出「真长」还是「假长」）</h2>
+<p class="trend">「宣称 128K」和「真能用到 128K」是两回事。评测线从合成检索（needle-in-haystack）走到真实任务（LongBench / LooGLE / ZeroSCROLLS），再到「深推理」（LongBench v2 / BABILong / Counting-Stars），最后 HELMET 反过来指出「只测 NIAH 会高估」。核心教训：检索容易、推理难、位置越靠中间越差。</p>
+
+<p class="paper"><b>Needle-in-a-Haystack（NIAH）</b>（<a href="https://github.com/gkamradt/LLMTest_NeedleInAHaystack">Kamradt 2023，博客/GitHub</a>）<br>
+<code class="recipe">niah -&gt; 检索压力测试 [长文本塞一根「针」]</code><br>
+<span class="idea"><span class="p">问题</span> 长上下文模型能不能真的从长文本里找回一个事实；<span class="p">方法</span> 把一句无关的「针」藏进长文本任意深度，问模型找出来；<span class="p">核心</span> 最流行的长上下文可视化测法，催生了「有效上下文长度」的讨论，也因过于简单被批「高估」。</span></p>
+
+<div class="deep">
+<p class="paper"><b>Lost in the Middle</b>（<a href="https://arxiv.org/abs/2307.03172">2307.03172</a>，Liu et al. 2023）<br>
+<code class="recipe">analysis -&gt; U 形位置效应 [开头结尾好、中间差]</code><br>
+<span class="idea"><span class="p">问题</span> 模型到底怎么用长上下文、信息位置有没有影响；<span class="p">方法</span> 在多文档问答和 KV 检索上系统变换相关信息的位置；<span class="p">核心</span> 发现「Lost in the Middle」——信息在开头和结尾表现好、在中间骤降，成为长上下文最著名的经验规律。</span></p>
+</div>
+
+<p class="paper"><b>LongBench</b>（<a href="https://arxiv.org/abs/2308.14508">2308.14508</a>，Bai et al. 2023）<br>
+<code class="recipe">benchmark(双语多任务) -&gt; 长上下文理解 [6 类 21 任务]</code><br>
+<span class="idea"><span class="p">问题</span> 缺系统长上下文理解评测；<span class="p">方法</span> 中英双语、单/多文档、检索、摘要、代码、合成六类；<span class="p">核心</span> 最常用的长上下文理解 benchmark。</span></p>
+
+<div class="deep">
+<p class="paper"><b>RULER</b>（<a href="https://arxiv.org/abs/2404.06654">2404.06654</a>，Hsieh et al. 2024）<br>
+<code class="recipe">benchmark(合成检索) -&gt; 真实上下文长度 [变体 needle]</code><br>
+<span class="idea"><span class="p">问题</span> 「宣称 128K」≠「真能用到 128K」；<span class="p">方法</span> 用变体 needle-in-haystack（多针、多跳、聚合）测有效上下文长度；<span class="p">核心</span> 照妖镜，揭示大多数模型的实际可用长度远低于宣称值。</span></p>
+</div>
+
+<p class="paper"><b>∞Bench（InfiniteBench）</b>（<a href="https://arxiv.org/abs/2402.13718">2402.13718</a>，Zhang et al. 2024）<br>
+<code class="recipe">benchmark(100K+) -&gt; 极长上下文 [检索/推理/长链]</code><br>
+<span class="idea"><span class="p">问题</span> 需要 100K+ 真实任务评测；<span class="p">方法</span> 构造 100K 以上检索、推理、长链依赖；<span class="p">核心</span> 极长上下文的压力测试。</span></p>
+
+<p class="paper"><b>L-Eval</b>（<a href="https://arxiv.org/abs/2307.11088">2307.11088</a>，An et al. 2023）<br>
+<code class="recipe">benchmark(长序列) -&gt; 多任务 [20 类任务]</code><br>
 <span class="idea"><span class="p">问题</span> 早期缺标准化长序列评测；<span class="p">方法</span> 覆盖推理/问答/摘要等 20 类长任务；<span class="p">核心</span> 早期长上下文评测标准之一。</span></p>
 
-<p class="paper"><b>InfiniteBench</b>（<a href="https://arxiv.org/abs/2402.13718">2402.13718</a>）<br>
-<code class="recipe">InfiniteBench: 100K+ 评测 -&gt; 极长上下文 [检索/推理/长链任务]</code><br>
-<span class="idea"><span class="p">问题</span> 需要 100K+ 级别的真实任务评测；<span class="p">方法</span> 构造 100K 以上的检索、推理、长链依赖任务；<span class="p">核心</span> 极长上下文的压力测试。</span></p>
+<p class="paper"><b>ZeroSCROLLS</b>（<a href="https://arxiv.org/abs/2305.14196">2305.14196</a>，Shaham et al. 2023）<br>
+<code class="recipe">benchmark(零样本) -&gt; 长文本理解 [无训练集]</code><br>
+<span class="idea"><span class="p">问题</span> 长文本评测需要零样本、无数据泄露；<span class="p">方法</span> 从 SCROLLS 改造 6 个任务 + 新增 4 个（含信息融合），只有测试/验证集；<span class="p">核心</span> 零样本长文本理解基准，避免训练集污染。</span></p>
 
-<h2>8. 共识与分歧（速记版）</h2>
+<p class="paper"><b>LooGLE</b>（<a href="https://arxiv.org/abs/2311.04939">2311.04939</a>，Li et al. 2023）<br>
+<code class="recipe">benchmark(真实长文档) -&gt; 长上下文理解 [6 类任务]</code><br>
+<span class="idea"><span class="p">问题</span> 早期长上下文基准偏短、偏简单、非真实；<span class="p">方法</span> 构造超长真实文档、6 类任务、跨度长依赖；<span class="p">核心</span> 揭示 LLM 在真实长上下文上表现远低于合成任务。</span></p>
+
+<p class="paper"><b>LongBench v2</b>（<a href="https://arxiv.org/abs/2412.15204">2412.15204</a>，2024）<br>
+<code class="recipe">benchmark(深推理) -&gt; 8k~2M 词难题 [503 道 MCQ / 6 类]</code><br>
+<span class="idea"><span class="p">问题</span> v1 偏检索、短模型也能蒙对；<span class="p">方法</span> 503 道「检索不够、要真推理」的多选题，上下文 8k 到 2M 词；<span class="p">核心</span> 区分「找得到」和「想得清」，旗舰主打的深度长上下文评测。</span></p>
+
+<p class="paper"><b>Counting-Stars</b>（<a href="https://arxiv.org/abs/2403.11802">2403.11802</a>，2024）<br>
+<code class="recipe">benchmark(多证据) -&gt; 长上下文 [多证据 + 位置感知 + 可扩展]</code><br>
+<span class="idea"><span class="p">问题</span> 单针 NIAH 太简单、又难扩展到更复杂；<span class="p">方法</span> 多证据、位置感知、可无限生成的合成基准；<span class="p">核心</span> 用「多证据聚合」逼出模型真实的长上下文聚合能力。</span></p>
+
+<p class="paper"><b>BABILong（Reasoning-in-a-Haystack）</b>（<a href="https://arxiv.org/abs/2406.10149">2406.10149</a>，2024）<br>
+<code class="recipe">benchmark(推理 + 检索) -&gt; 长上下文推理 [bAbI 事实埋进长文本]</code><br>
+<span class="idea"><span class="p">问题</span> NIAH 只测检索、不测推理；<span class="p">方法</span> 把 bAbI 推理任务的事实埋进超长无关文本，测「推理 + 检索」；<span class="p">核心</span> 揭示很多模型的推理能力在长上下文下骤降，区分「检索」与「推理」。</span></p>
+
+<p class="paper"><b>HELMET</b>（<a href="https://arxiv.org/abs/2410.02694">2410.02694</a>，2024）<br>
+<code class="recipe">benchmark(综合) -&gt; 全面评测 [7 类 7 任务]</code><br>
+<span class="idea"><span class="p">问题</span> 大家各测各的（NIAH 或任意子集），结论不可比、还高估；<span class="p">方法</span> 7 类应用、7 个真实任务做整体评估；<span class="p">核心</span> 证明只测 NIAH 会系统性高估，主张「全面多任务」评估。</span></p>
+
+<p class="paper"><b>Alice in Wonderland（Simple Tasks Show Reasoning Breakdown）</b>（<a href="https://arxiv.org/abs/2406.02061">2406.02061</a>，2024）<br>
+<code class="recipe">benchmark(简单任务) -&gt; 推理崩塌 [数词频 / 查连词]</code><br>
+<span class="idea"><span class="p">问题</span> SOTA 模型刷爆基准，真实推理能力到底如何；<span class="p">方法</span> 用「数某词出现几次」这类简单任务测，发现模型在标准基准的简单版本上就崩；<span class="p">核心</span> 揭示基准过拟合、推理能力被高估，是对「长上下文理解」的冷水。</span></p>
+
+<h2>10. 共识与分歧（速记版）</h2>
 <p><b>共识：</b></p>
 <ol>
+<li>注意力不必是 O(n²)：稀疏（Sparse Transformer → NSA/HiLS）和硬件高效实现（FlashAttention）都已成熟，长序列「算得动」不再是问题。</li>
 <li>attention sink 已被「内置 sink 参数」（GPT-OSS）或「门控消除 sink」（Gated Attention）两个方向解决，不再是瓶颈。</li>
-<li>稀疏注意力是当前主战场，方向收敛为「原生可训练 + 硬件对齐 + 端到端检索」（NSA / HiLS）。</li>
-<li>KV 驱逐和位置编码外推是「免训/低成本」的实用路线，仍大量用于推理加速。</li>
-<li>「宣称的上下文长度」远大于「实际可用长度」，RULER 成了事实上的照妖镜。</li>
+<li>KV 是主要显存瓶颈，驱逐/压缩（H2O → SnapKV/DMC/YoCo）和分页管理（PagedAttention）是免训的实用路线。</li>
+<li>位置外推（PI → YaRN → LongRoPE）能把 4K 模型低成本拉到 128K/2M，但天花板有限。</li>
+<li>「宣称长度」远大于「实际可用长度」，且信息在上下文中间会被「lost in the middle」——评测要看 RULER/LongBench v2 而非只看 NIAH。</li>
 </ol>
 <p><b>分歧 / 难点：</b></p>
 <ol>
-<li><b>稀疏 vs 线性 vs 密集</b>：稀疏注意力（NSA/MoBA）质量高但结构复杂，线性/SSM（Mamba）简单但表达力受限，谁最终胜出未定。</li>
+<li><b>稀疏 vs 线性 vs 混合</b>：稀疏（NSA/MoBA）质量高但结构复杂，线性/SSM（Mamba）简单但表达力受限，2025 起的答案是「混合」（Qwen3-Next、Kimi K3），但配比多为经验值。</li>
 <li><b>稀疏选择可不可微</b>：手工规则（MInference）vs 端到端可微（HiLS/SeerAttention）——后者好但难训。</li>
-<li><b>长度外推 vs 原生长训练</b>：靠位置编码外推（YaRN/HoPE）省算力但天花板低，原生长上下文训练贵但上限高。</li>
-<li><b>评测</b>：合成任务（RULER）与实际长文本任务（LongBench）结论常不一致，缺统一标准。</li>
+<li><b>外推 vs 原生长训练</b>：靠位置编码外推（PI/YaRN）省算力但天花板低，原生长上下文续训（Data Engineering 128K）贵但上限高。</li>
+<li><b>KV 压缩的「可压缩性」</b>：越省越不准，驱逐（Scissorhands/FastGen）和压缩（DMC/YoCo）谁更适合哪类任务，尚无定论。</li>
+<li><b>评测</b>：合成检索（NIAH/RULER）高估、真实任务（LooGLE/HELMET）更难，缺一个「既难、又真实、又无污染」的统一标准。</li>
 </ol>
 
 <hr>
-<p class="note">说明：种子论文 HiLS（2607.02980）已读原文（摘要、方法、实验、参考文献）。StreamingLLM / H2O / Gated Attention / GPT-OSS 的关键事实经原文与模型卡核实；其余稀疏注意力 / 位置编码 / benchmark 论文以标题 + 通识归纳，arXiv 号均已核对。</p>
+<p class="note">说明：核心论文（StreamingLLM / H2O / Gated Attention / GPT-OSS / HiLS / FlashAttention / PI / YaRN 等）已读原文摘要/方法，其余为标题 + 通识归纳；所有 arXiv 号均逐一核对。稀疏注意力细节与 attention sink 脉络与本文件互链；线性/SSM 的完整演进见 <a href="linear-sparse-attention.html">linear-sparse-attention.html</a>。</p>
 
 </main>
 </body>
