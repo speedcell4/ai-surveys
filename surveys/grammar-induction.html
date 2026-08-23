@@ -42,6 +42,8 @@ body.lv1 .paper { display:none; }
 body.lv1 .deep .paper { display:block; }
 body.lv1 .note, body.lv2 .note { display:none; }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/Temml-Local.min.css">
+<script src="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/temml.min.js" defer></script>
 </head>
 <body>
 <main class="container">
@@ -253,7 +255,7 @@ body.lv1 .note, body.lv2 .note { display:none; }
 
 <p class="paper"><b>Dependency Grammar Induction with a Neural Variational Transition-Based Parser（Li et al. 2019）</b>（<a href="https://ojs.aaai.org/index.php/AAAI/article/view/4636">AAAI 2019</a>）<br>
 <code class="recipe">neural-transition(sentence) -&gt; 依存树 + ELBO（变分转移系统）</code><br>
-<span class="idea"><span class="p">问题</span> 依存文法诱导缺一个推理快（O(n)）又能变分推断的神经 parser；<span class="p">方法</span> 神经转移系统 parser + 变分推断做 grammar induction；<span class="p">核心</span> 变分转移系统把无监督依存诱导做进神经 parser。</span></p>
+<span class="idea"><span class="p">问题</span> 依存文法诱导缺一个推理快（$O(n)$）又能变分推断的神经 parser；<span class="p">方法</span> 神经转移系统 parser + 变分推断做 grammar induction；<span class="p">核心</span> 变分转移系统把无监督依存诱导做进神经 parser。</span></p>
 
 <p class="paper"><b>Differentiable Perturb-and-Parse（Corro &amp; Titov 2019）</b>（<a href="https://arxiv.org/abs/1807.09875">1807.09875</a>，ICLR 2019）<br>
 <code class="recipe">structured-vae(sentence) -&gt; 成分树 + ELBO（perturb-and-map）</code><br>
@@ -468,18 +470,6 @@ body.lv1 .note, body.lv2 .note { display:none; }
 
 </main>
 
-<script>
-(function(){
-  var btns = Array.prototype.slice.call(document.querySelectorAll('.lvbtn'));
-  function setLv(lv){
-    document.body.classList.remove('lv1','lv2','lv3');
-    document.body.classList.add('lv'+lv);
-    btns.forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-lv')===lv); });
-  }
-  btns.forEach(function(b){ b.addEventListener('click', function(){ setLv(b.getAttribute('data-lv')); }); });
-  setLv('2');
-})();
-</script>
-
+<script src="../assets/js/main.js" defer></script>
 </body>
 </html>

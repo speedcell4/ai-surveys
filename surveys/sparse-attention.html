@@ -43,6 +43,8 @@ body.lv1 .paper { display:none; }
 body.lv1 .deep .paper { display:block; }
 body.lv1 .note, body.lv2 .note { display:none; }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/Temml-Local.min.css">
+<script src="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/temml.min.js" defer></script>
 </head>
 <body>
 <main class="container">
@@ -59,10 +61,10 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <p class="sub">保留精确注意力、只算「选中的」token 对——核心问题是<b>选 block 还是选 token、怎么选</b> · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话（问题 / 方法 / 核心）</p>
 
 <h2>0. 记法（这个领域的「最大公约数」）</h2>
-<p>稀疏注意力 = 不把 O(n²) 的注意力矩阵全算一遍，而是先「选」出值得算的 token 对，再在子集上做精确注意力。所有方法的差别最终落在两个轴：<b>选择粒度</b>（选 block 还是选 token）和<b>选择方式</b>（手工规则 / 路由 / 学习）。配方围绕这两轴：</p>
+<p>稀疏注意力 = 不把 $O(n^2)$ 的注意力矩阵全算一遍，而是先「选」出值得算的 token 对，再在子集上做精确注意力。所有方法的差别最终落在两个轴：<b>选择粒度</b>（选 block 还是选 token）和<b>选择方式</b>（手工规则 / 路由 / 学习）。配方围绕这两轴：</p>
 <table>
 <tr><th>记号</th><th>意思</th></tr>
-<tr><td><code>dense</code></td><td>全注意力，O(n²)，不选、全算</td></tr>
+<tr><td><code>dense</code></td><td>全注意力，$O(n^2)$，不选、全算</td></tr>
 <tr><td><code>sparse(block)</code></td><td><b>块级选择</b>：挑连续的 token 块，块内保留全部 token</td></tr>
 <tr><td><code>sparse(token)</code></td><td><b>token 级选择</b>：直接挑单个 token（细粒度）</td></tr>
 <tr><td><code>compress(m:1)</code></td><td><b>块压缩</b>：每 m 个连续 token 压成 1 个 KV 条目（m=4/32/128）</td></tr>
@@ -83,22 +85,22 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <p>两条并行轴：<b>选择粒度</b>（block → token）、<b>选择方式</b>（固定 → 路由 → 学习 → 压缩后选择）。交点是一个开放问题：<b>是先压缩再选（CSA/HCA），还是先选再算（DSA/Seer）？</b></p>
 
 <h2>2. 早期稀疏注意力（2019-2020，先让长序列算得动）</h2>
-<p class="trend">第一代只求「跑得动」：用固定稀疏模式替代全注意力，不追求动态选择。这段的遗产是「注意力不必是 O(n²)」。更完整的 hardware 视角（FlashAttention / PagedAttention）见 <a href="long-context.html">long-context.html</a>。</p>
+<p class="trend">第一代只求「跑得动」：用固定稀疏模式替代全注意力，不追求动态选择。这段的遗产是「注意力不必是 $O(n^2)$」。更完整的 hardware 视角（FlashAttention / PagedAttention）见 <a href="long-context.html">long-context.html</a>。</p>
 
 <p class="paper"><b>Sparse Transformer</b>（<a href="https://arxiv.org/abs/1904.10509">1904.10509</a>，Child et al. 2019）<br>
-<code class="recipe">sparse(fixed) -&gt; O(n√n) [strided + fixed 两种固定模式]</code><br>
-<span class="idea"><span class="p">问题</span> 注意力时间/显存随长度平方涨；<span class="p">方法</span> 把注意力矩阵分解成 strided（跨步）和 fixed（固定局部）两种稀疏模式；<span class="p">核心</span> 稀疏注意力开山，复杂度 O(n√n)。</span></p>
+<code class="recipe">sparse(fixed) -&gt; $O(n\sqrt{n})$ [strided + fixed 两种固定模式]</code><br>
+<span class="idea"><span class="p">问题</span> 注意力时间/显存随长度平方涨；<span class="p">方法</span> 把注意力矩阵分解成 strided（跨步）和 fixed（固定局部）两种稀疏模式；<span class="p">核心</span> 稀疏注意力开山，复杂度 $O(n\sqrt{n})$。</span></p>
 
 <p class="paper"><b>Reformer</b>（<a href="https://arxiv.org/abs/2001.04451">2001.04451</a>，Kitaev et al. 2020）<br>
-<code class="recipe">sparse(LSH) -&gt; O(n log n) [局部敏感哈希 + 可逆残差]</code><br>
+<code class="recipe">sparse(LSH) -&gt; $O(n \log n)$ [局部敏感哈希 + 可逆残差]</code><br>
 <span class="idea"><span class="p">问题</span> 全注意力算不动、还要存激活；<span class="p">方法</span> 用局部敏感哈希只让相似 token 互相注意，配可逆残差省激活内存；<span class="p">核心</span> 哈希近似注意力路线。</span></p>
 
 <p class="paper"><b>Longformer</b>（<a href="https://arxiv.org/abs/2004.05150">2004.05150</a>，Beltagy et al. 2020）<br>
-<code class="recipe">sparse(滑窗+全局+膨胀) -&gt; O(n) [三种模式组合]</code><br>
-<span class="idea"><span class="p">问题</span> 长文档放不进全注意力；<span class="p">方法</span> 组合滑窗、任务相关全局 token、膨胀窗口；<span class="p">核心</span> O(n) 复杂度，长文档 NLP 常用底座。</span></p>
+<code class="recipe">sparse(滑窗+全局+膨胀) -&gt; $O(n)$ [三种模式组合]</code><br>
+<span class="idea"><span class="p">问题</span> 长文档放不进全注意力；<span class="p">方法</span> 组合滑窗、任务相关全局 token、膨胀窗口；<span class="p">核心</span> $O(n)$ 复杂度，长文档 NLP 常用底座。</span></p>
 
 <p class="paper"><b>BigBird</b>（<a href="https://arxiv.org/abs/2007.14062">2007.14062</a>，Zaheer et al. 2020）<br>
-<code class="recipe">sparse(随机+滑窗+全局) -&gt; O(n) [随机图 + 理论保证]</code><br>
+<code class="recipe">sparse(随机+滑窗+全局) -&gt; $O(n)$ [随机图 + 理论保证]</code><br>
 <span class="idea"><span class="p">问题</span> 稀疏注意力凭什么能替代全注意力；<span class="p">方法</span> 随机、滑窗、全局三类边的稀疏图，给出图灵完备性理论；<span class="p">核心</span> 既省算力又带理论保证。</span></p>
 
 <h2>3. DeepSeek 稀疏注意力谱系（NSA → DSA → CSA + HCA）</h2>
@@ -198,18 +200,6 @@ body.lv1 .note, body.lv2 .note { display:none; }
 
 </main>
 
-<script>
-(function(){
-  var btns = Array.prototype.slice.call(document.querySelectorAll('.lvbtn'));
-  function setLv(lv){
-    document.body.classList.remove('lv1','lv2','lv3');
-    document.body.classList.add('lv'+lv);
-    btns.forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-lv')===lv); });
-  }
-  btns.forEach(function(b){ b.addEventListener('click', function(){ setLv(b.getAttribute('data-lv')); }); });
-  setLv('2');
-})();
-</script>
-
+<script src="../assets/js/main.js" defer></script>
 </body>
 </html>

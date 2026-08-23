@@ -137,7 +137,7 @@
 - **中级（完整）**：显示全部论文（默认档）。
 - **高级（深读）**：全部论文 + 底部 `.note` 的「说明 / 交叉引用 / 哪些读了原文哪些只看标题」脚注。
 
-写法约束：<b>真正奠定脉络的节点性论文</b>（源头 / 地基 / 转折 / 引爆点）用 `<div class="deep">` 包住，数量克制——每个主题通常 3~8 篇，宁缺毋滥；其余论文用普通 `<p class="paper">`。判断标准：删掉这篇，这条线的「从哪到哪」就断了，它就该是 `.deep`。顶部三档按钮和 `<script>` 过滤逻辑直接照抄已有文件。
+写法约束：<b>真正奠定脉络的节点性论文</b>（源头 / 地基 / 转折 / 引爆点）用 `<div class="deep">` 包住，数量克制——每个主题通常 3~8 篇，宁缺毋滥；其余论文用普通 `<p class="paper">`。判断标准：删掉这篇，这条线的「从哪到哪」就断了，它就该是 `.deep`。顶部三档按钮照抄已有文件，过滤逻辑统一放 `assets/js/main.js`，页面用 `<script src="../assets/js/main.js" defer></script>` 引用，不要内联 JS。
 
 ## 检索与核实流程
 
@@ -151,7 +151,11 @@
 
 ## 交付
 
-- 直接手写 HTML（不要 Markdown 转 HTML），内联 CSS，单文件自包含，风格对齐 `surveys/` 下已有文件。
+- 直接手写 HTML（不要 Markdown 转 HTML），风格对齐 `surveys/` 下已有文件。CSS 可内联（每页只保留 `:root` 主题色等少量局部样式），JS 不内联，统一引用 `../assets/js/main.js`。
+- **数学公式用 Temml 渲染**（TeX → MathML Core，轻、快、无需多依赖）。写法：LaTeX 放在 `$…$`（行内）或 `$$…$$`（独立行）。每页 `<head>` 引这两个 CDN：
+  - `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/Temml-Local.min.css">`
+  - `<script src="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/temml.min.js" defer></script>`
+- **配方 / 伪公式里的数学记号一律写 LaTeX**，别再用 Unicode 伪上标：`O(n²)` 写 `$O(n^2)$`、`O(n√n)` 写 `$O(n\sqrt{n})$`、`k·vᵀ` 写 `$k\cdot v^{\top}$`、希腊字母 `ε / φ / γ / β` 写 `$\varepsilon$` 等。配方里非数学的箭头仍用 `-&gt;`。
 - HTML 成品放 `surveys/<topic>.html`，台账放 `data/<topic>.jsonl`；更新根目录 `index.html` 和 `README.md` 的索引。
 
 ## 论文台账（每个主题一份 JSONL）

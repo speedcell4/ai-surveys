@@ -43,6 +43,8 @@ body.lv1 .paper { display:none; }
 body.lv1 .deep .paper { display:block; }
 body.lv1 .note, body.lv2 .note { display:none; }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/Temml-Local.min.css">
+<script src="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/temml.min.js" defer></script>
 </head>
 <body>
 <main class="container">
@@ -104,8 +106,8 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <span class="idea"><span class="p">问题</span> 语言模型没对齐用户意图；<span class="p">方法</span> 三段式：SFT → 训奖励模型（人类偏好排序）→ PPO 优化；<span class="p">核心</span> 确立「RLHF」范式，ChatGPT 的底座。</span></p>
 
 <p class="paper"><b>DPO（Direct Preference Optimization）</b>（<a href="https://arxiv.org/abs/2305.18290">2305.18290</a>，Rafailov et al. 2023）<br>
-<code class="recipe">dpo -&gt; 免奖励模型对齐 [隐式奖励 = β·log(π/π_ref)]</code><br>
-<span class="idea"><span class="p">问题</span> RLHF 要单独训奖励模型、再 RL，麻烦且不稳；<span class="p">方法</span> 把奖励模型「隐式化」成 β·log(π/π_ref)，直接从偏好对做分类式优化；<span class="p">核心</span> 免奖励模型、免 RL 的对齐范式，是后续自奖励/偏好优化一系列工作的底座。</span></p>
+<code class="recipe">dpo -&gt; 免奖励模型对齐 [隐式奖励 = $\beta\cdot\log(\pi/\pi_{\mathrm{ref}})$]</code><br>
+<span class="idea"><span class="p">问题</span> RLHF 要单独训奖励模型、再 RL，麻烦且不稳；<span class="p">方法</span> 把奖励模型「隐式化」成 $\beta\cdot\log(\pi/\pi_{\mathrm{ref}})$，直接从偏好对做分类式优化；<span class="p">核心</span> 免奖励模型、免 RL 的对齐范式，是后续自奖励/偏好优化一系列工作的底座。</span></p>
 
 <p class="paper"><b>RLOO（REINFORCE Leave-One-Out）</b>（<a href="https://arxiv.org/abs/2402.14740">2402.14740</a>，Ahmadian et al. 2024）<br>
 <code class="recipe">pg(leave-one-out) -&gt; 免价值模型 [同组其余样本当 baseline]</code><br>
@@ -222,18 +224,6 @@ body.lv1 .note, body.lv2 .note { display:none; }
 
 </main>
 
-<script>
-(function(){
-  var btns = Array.prototype.slice.call(document.querySelectorAll('.lvbtn'));
-  function setLv(lv){
-    document.body.classList.remove('lv1','lv2','lv3');
-    document.body.classList.add('lv'+lv);
-    btns.forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-lv')===lv); });
-  }
-  btns.forEach(function(b){ b.addEventListener('click', function(){ setLv(b.getAttribute('data-lv')); }); });
-  setLv('2');
-})();
-</script>
-
+<script src="../assets/js/main.js" defer></script>
 </body>
 </html>

@@ -42,6 +42,8 @@ body.lv1 .paper { display:none; }
 body.lv1 .deep .paper { display:block; }
 body.lv1 .note, body.lv2 .note { display:none; }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/Temml-Local.min.css">
+<script src="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/temml.min.js" defer></script>
 </head>
 <body>
 <main class="container">
@@ -66,8 +68,8 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <tr><td><code>ar(A)</code></td><td>自回归（next-token）</td></tr>
 <tr><td><code>patch</code></td><td>patchify 后的原始像素</td></tr>
 <tr><td><code>vae(patch)</code></td><td>VAE 压缩后的潜空间</td></tr>
-<tr><td><code>-&gt; pred + loss</code></td><td>网络预测 pred（ε / v / x / consistency），用 loss 做损失</td></tr>
-<tr><td><code>ε-loss / v-loss / x-loss / consistency-loss</code></td><td>损失类型：噪声 MSE / 速度 MSE / 干净图 MSE / 一致性损失</td></tr>
+<tr><td><code>-&gt; pred + loss</code></td><td>网络预测 pred（$\varepsilon$ / v / x / consistency），用 loss 做损失</td></tr>
+<tr><td><code>$\varepsilon$-loss / v-loss / x-loss / consistency-loss</code></td><td>损失类型：噪声 MSE / 速度 MSE / 干净图 MSE / 一致性损失</td></tr>
 <tr><td><code>X_shared</code></td><td>X 由「理解 + 生成」共享</td></tr>
 <tr><td><code>X_und + X_gen</code></td><td>理解与生成各自独立（两套 X）</td></tr>
 <tr><td><code>X (Y_und + Y_gen)</code></td><td>X 共享，其内部 Y 拆成 und / gen 两份</td></tr>
@@ -76,7 +78,7 @@ body.lv1 .note, body.lv2 .note { display:none; }
 
 <h2>1. 主线：谁、克服了什么</h2>
 <ol>
-<li>「像素太贵，必须潜空间」→ 被 <b>simple diffusion / 噪声调度 / RIN / HDiT</b> 拆掉：端到端像素也能到 1024²。</li>
+<li>「像素太贵，必须潜空间」→ 被 <b>simple diffusion / 噪声调度 / RIN / HDiT</b> 拆掉：端到端像素也能到 $1024^2$。</li>
 <li>「必须预测噪声/速度」→ 被 <b>JiT</b> 拆掉：直接预测干净图（x-pred）就行。</li>
 <li>「必须多步采样」→ 被 <b>MeanFlow / pMF</b> 拆掉：一步生成。</li>
 <li>「必须有 VAE 才有表示」→ 被 <b>EPG</b> 拆掉：自监督预训练替代 VAE。</li>
@@ -100,36 +102,36 @@ body.lv1 .note, body.lv2 .note { display:none; }
 
 <div class="deep">
 <p class="paper"><b>DDPM</b>（<a href="https://arxiv.org/abs/2006.11239">2006.11239</a>）<br>
-<code class="recipe">diffuse(patch + noise) -&gt; ε-pred + ε-loss</code><br>
+<code class="recipe">diffuse(patch + noise) -&gt; $\varepsilon$-pred + $\varepsilon$-loss</code><br>
 <span class="idea"><span class="p">问题</span> GAN 训练不稳、易模式崩塌；<span class="p">方法</span> 把生成改成「逐步加噪→逐步去噪」，网络直接预测噪声；<span class="p">核心</span> 把难的「一步生成」拆成很多步简单的「去噪」。</span></p>
 </div>
 
 <div class="deep">
 <p class="paper"><b>LDM / Stable Diffusion</b>（<a href="https://arxiv.org/abs/2112.10752">2112.10752</a>）<br>
-<code class="recipe">diffuse(vae(patch) + noise) -&gt; ε-pred + ε-loss</code><br>
+<code class="recipe">diffuse(vae(patch) + noise) -&gt; $\varepsilon$-pred + $\varepsilon$-loss</code><br>
 <span class="idea"><span class="p">问题</span> 像素空间去噪每步都跑全分辨率、太贵；<span class="p">方法</span> 先用 VAE 压到潜空间再扩散；<span class="p">核心</span> VAE 有损、且「重建」与「生成」目标错位——正是后来「回归像素」要解决的痛点。</span></p>
 </div>
 
 <div class="deep">
 <p class="paper"><b>DiT</b>（<a href="https://arxiv.org/abs/2212.09748">2212.09748</a>）<br>
-<code class="recipe">diffuse(vae(patch) + noise) -&gt; ε-pred + ε-loss（U-Net → ViT）</code><br>
+<code class="recipe">diffuse(vae(patch) + noise) -&gt; $\varepsilon$-pred + $\varepsilon$-loss（U-Net → ViT）</code><br>
 <span class="idea"><span class="p">问题</span> U-Net 难随参数规模扩展；<span class="p">方法</span> 用 ViT 替换 U-Net 做扩散骨干；<span class="p">核心</span> 这是后来所有 pDiT 的架构底座。</span></p>
 </div>
 
 <p class="paper"><b>U-ViT</b>（<a href="https://arxiv.org/abs/2209.12152">2209.12152</a>）<br>
-<code class="recipe">diffuse(vae(patch) + noise) -&gt; ε-pred + ε-loss（ViT + 长跳跃连接）</code><br>
+<code class="recipe">diffuse(vae(patch) + noise) -&gt; $\varepsilon$-pred + $\varepsilon$-loss（ViT + 长跳跃连接）</code><br>
 <span class="idea"><span class="p">问题</span> 纯 ViT 难保留细节；<span class="p">方法</span> 加长跳跃连接的 U 形 ViT；<span class="p">核心</span> 这个 U 形思路后来被 PixelU 捡回。</span></p>
 
 <p class="paper"><b>simple diffusion</b>（<a href="https://arxiv.org/abs/2301.11093">2301.11093</a>）<br>
-<code class="recipe">diffuse(patch + noise) -&gt; ε-pred + ε-loss + 分辨率相关噪声调度</code><br>
+<code class="recipe">diffuse(patch + noise) -&gt; $\varepsilon$-pred + $\varepsilon$-loss + 分辨率相关噪声调度</code><br>
 <span class="idea"><span class="p">问题</span> 「像素扩散上不了高分辨率」的共识；<span class="p">方法</span> 调对噪声调度直接端到端像素生成；<span class="p">核心</span> 第一个有力挑战「必须潜空间」。</span></p>
 
 <p class="paper"><b>On the Importance of Noise Scheduling</b>（<a href="https://arxiv.org/abs/2301.10972">2301.10972</a>）<br>
-<code class="recipe">diffuse(patch + noise) -&gt; ε-pred + ε-loss + 自适应噪声调度</code><br>
-<span class="idea"><span class="p">问题</span> 噪声调度不对导致像素扩散质量差；<span class="p">方法</span> 随分辨率自适应调调度；<span class="p">核心</span> 配 RIN 做到 1024²。</span></p>
+<code class="recipe">diffuse(patch + noise) -&gt; $\varepsilon$-pred + $\varepsilon$-loss + 自适应噪声调度</code><br>
+<span class="idea"><span class="p">问题</span> 噪声调度不对导致像素扩散质量差；<span class="p">方法</span> 随分辨率自适应调调度；<span class="p">核心</span> 配 RIN 做到 $1024^2$。</span></p>
 
 <p class="paper"><b>RIN（Recurrent Interface Networks）</b>（<a href="https://arxiv.org/abs/2212.11972">2212.11972</a>）<br>
-<code class="recipe">diffuse(patch + noise) -&gt; ε-pred + ε-loss（循环接口网络）</code><br>
+<code class="recipe">diffuse(patch + noise) -&gt; $\varepsilon$-pred + $\varepsilon$-loss（循环接口网络）</code><br>
 <span class="idea"><span class="p">问题</span> 高分辨率下注意力算力爆表；<span class="p">方法</span> 用少量「接口 token」循环更新；<span class="p">核心</span> 省算力做大分辨率。</span></p>
 
 <p class="paper"><b>Hourglass DiT</b>（<a href="https://arxiv.org/abs/2401.11605">2401.11605</a>）<br>
@@ -138,7 +140,7 @@ body.lv1 .note, body.lv2 .note { display:none; }
 
 <p class="paper"><b>Simpler Diffusion (SiD2)</b>（<a href="https://arxiv.org/abs/2410.19324">2410.19324</a>）<br>
 <code class="recipe">diffuse(patch + noise) -&gt; v-pred + sigmoid loss（噪声调度）</code><br>
-<span class="idea"><span class="p">问题</span> 像素扩散质量长期不如潜空间；<span class="p">方法</span> sigmoid 损失 + 分辨率相关调度；<span class="p">核心</span> 512² 达 1.5 FID，打平潜空间。</span></p>
+<span class="idea"><span class="p">问题</span> 像素扩散质量长期不如潜空间；<span class="p">方法</span> sigmoid 损失 + 分辨率相关调度；<span class="p">核心</span> $512^2$ 达 1.5 FID，打平潜空间。</span></p>
 
 <p class="paper"><b>Score-Based Generative Modeling through SDEs</b>（<a href="https://arxiv.org/abs/2011.13456">2011.13456</a>）<br>
 <code class="recipe">diffuse(A + noise) -&gt; score-pred + score-loss（SDE 统一）</code><br>
@@ -161,7 +163,7 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <span class="idea"><span class="p">问题</span> 扩散与流是两套形式、不好统一；<span class="p">方法</span> 用随机插值（stochastic interpolant）统一 SDE/ODE 视角、噪声与路径可自由选；<span class="p">核心</span> 扩散与流的统一理论框架（SiT 的理论底座）。</span></p>
 
 <p class="paper"><b>EDM（Elucidating the Design Space）</b>（<a href="https://arxiv.org/abs/2206.00364">2206.00364</a>）<br>
-<code class="recipe">diffuse(A + noise) -&gt; ε-pred + ε-loss（设计空间/调度）</code><br>
+<code class="recipe">diffuse(A + noise) -&gt; $\varepsilon$-pred + $\varepsilon$-loss（设计空间/调度）</code><br>
 <span class="idea"><span class="p">问题</span> 扩散超参繁杂、难调；<span class="p">方法</span> 系统厘清设计空间、给出最优噪声调度与参数化；<span class="p">核心</span> 噪声调度的「圣经」，简单扩散/RIN/SiD2 都从它出发。</span></p>
 
 <p class="paper"><b>Consistency Models</b>（<a href="https://arxiv.org/abs/2303.01469">2303.01469</a>）<br>
@@ -173,8 +175,8 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <span class="idea"><span class="p">问题</span> DiT 是扩散专用、没系统探索流；<span class="p">方法</span> 把 DiT 放进插值框架、系统对比流 vs 扩散；<span class="p">核心</span> 流的 DiT 版本，pDiT 的直接前身。</span></p>
 
 <p class="paper"><b>Imagen（Cascaded Diffusion）</b>（<a href="https://arxiv.org/abs/2205.11487">2205.11487</a>）<br>
-<code class="recipe">diffuse(patch + noise) -&gt; ε-pred + ε-loss（级联 64²→1024²）</code><br>
-<span class="idea"><span class="p">问题</span> 文生图想要高保真；<span class="p">方法</span> 在像素空间做级联超分（64²→256²→1024²）+ 大语言模型编码文本；<span class="p">核心</span> 早期像素空间文生图（级联），证明像素扩散可行。</span></p>
+<code class="recipe">diffuse(patch + noise) -&gt; $\varepsilon$-pred + $\varepsilon$-loss（级联 $64^2$→$1024^2$）</code><br>
+<span class="idea"><span class="p">问题</span> 文生图想要高保真；<span class="p">方法</span> 在像素空间做级联超分（$64^2$→$256^2$→$1024^2$）+ 大语言模型编码文本；<span class="p">核心</span> 早期像素空间文生图（级联），证明像素扩散可行。</span></p>
 
 <p class="paper"><b>SD3（Scaling Rectified Flow Transformers）</b>（<a href="https://arxiv.org/abs/2403.03206">2403.03206</a>）<br>
 <code class="recipe">flow(patch + noise) -&gt; v-pred + flow-loss（MMDiT + rectified flow）</code><br>
@@ -214,7 +216,7 @@ body.lv1 .note, body.lv2 .note { display:none; }
 
 <p class="paper"><b>pMF（Pixel Mean Flow）</b>（<a href="https://arxiv.org/abs/2601.22158">2601.22158</a>）<br>
 <code class="recipe">meanflow(patch + noise) -&gt; x-pred + v-loss（+ 感知损失）</code><br>
-<span class="idea"><span class="p">问题</span> 一步 + 无潜空间难做好；<span class="p">方法</span> 把 JiT 的 x-pred 与 MeanFlow 的一步结合，再叠加感知损失；<span class="p">核心</span> 一步无潜空间生成（256² 2.22 FID）。</span></p>
+<span class="idea"><span class="p">问题</span> 一步 + 无潜空间难做好；<span class="p">方法</span> 把 JiT 的 x-pred 与 MeanFlow 的一步结合，再叠加感知损失；<span class="p">核心</span> 一步无潜空间生成（$256^2$ 2.22 FID）。</span></p>
 
 <p class="paper"><b>CrossFlow</b>（<a href="https://arxiv.org/abs/2606.19970">2606.19970</a>）<br>
 <code class="recipe">flow(patch ⊕ vae(patch) + noise) -&gt; consistency + consistency-loss</code><br>
@@ -229,7 +231,7 @@ body.lv1 .note, body.lv2 .note { display:none; }
 
 <p class="paper"><b>PixelDiT（NVIDIA, CVPR 2026 Best Paper Finalist）</b>（<a href="https://arxiv.org/abs/2511.20645">2511.20645</a>）<br>
 <code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（双层：patch DiT + pixel DiT）</code><br>
-<span class="idea"><span class="p">问题</span> 单 patch 粒度难兼顾全局布局与局部纹理；<span class="p">方法</span> 双层（大 patch DiT 管布局 + 小 patch DiT 补纹理）；<span class="p">核心</span> 无 VAE 端到端做到 1024² 文生图。</span></p>
+<span class="idea"><span class="p">问题</span> 单 patch 粒度难兼顾全局布局与局部纹理；<span class="p">方法</span> 双层（大 patch DiT 管布局 + 小 patch DiT 补纹理）；<span class="p">核心</span> 无 VAE 端到端做到 $1024^2$ 文生图。</span></p>
 
 <p class="paper"><b>MiniT2I（何恺明团队，2026-06，MM-JiT）</b>（<a href="https://peppaking8.github.io/#/post/minit2i">博客</a> / <a href="https://github.com/PeppaKing8/minit2i-jax">代码</a>）<br>
 <code class="recipe">flow(patch + text) -&gt; x-pred + v-loss（MM-JiT = JiT + 轻量文本适配器）</code><br>
@@ -253,11 +255,11 @@ body.lv1 .note, body.lv2 .note { display:none; }
 
 <p class="paper"><b>AsymFlow</b>（<a href="https://arxiv.org/abs/2605.12964">2605.12964</a>）<br>
 <code class="recipe">flow(patch + noise) -&gt; v-pred（rank-asymmetric：噪声低秩 + 数据全维）</code><br>
-<span class="idea"><span class="p">问题</span> 像素空间 flow 难训、且想把 latent 模型变像素模型；<span class="p">方法</span> rank-asymmetric：噪声预测限在低秩子空间、数据预测保持全维，并把低秩像素子空间对齐到 latent 空间来微调；<span class="p">核心</span> 噪声低秩、数据全维的不对称参数化，256² 1.57 FID。</span></p>
+<span class="idea"><span class="p">问题</span> 像素空间 flow 难训、且想把 latent 模型变像素模型；<span class="p">方法</span> rank-asymmetric：噪声预测限在低秩子空间、数据预测保持全维，并把低秩像素子空间对齐到 latent 空间来微调；<span class="p">核心</span> 噪声低秩、数据全维的不对称参数化，$256^2$ 1.57 FID。</span></p>
 
 <p class="paper"><b>PixelU</b>（<a href="https://arxiv.org/abs/2606.27760">2606.27760</a>）<br>
 <code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（U 形 Transformer）</code><br>
-<span class="idea"><span class="p">问题</span> 低频语义与高频信号难在一个网络里同时建模；<span class="p">方法</span> U 形分层结构；<span class="p">核心</span> 256² 达 1.63 FID。</span></p>
+<span class="idea"><span class="p">问题</span> 低频语义与高频信号难在一个网络里同时建模；<span class="p">方法</span> U 形分层结构；<span class="p">核心</span> $256^2$ 达 1.63 FID。</span></p>
 
 <p class="paper"><b>AnchorDiT</b>（<a href="https://hub-assets-cache.baai.ac.cn/view/56890">解读</a>）<br>
 <code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（语义锚点引导）</code><br>
@@ -419,7 +421,7 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <span class="idea"><span class="p">问题</span> latent 压缩损害细节、破坏多视图一致性；<span class="p">方法</span> 像素空间多视图 inpainting 扩散 + 粗到细，联合补不可见区域；<span class="p">核心</span> 无损耗几何引导 + 像素级多视图一致。</span></p>
 
 <p class="paper"><b>MedSyn</b>（见 <a href="https://arxiv.org/abs/2607.17585">综述</a>）<br>
-<code class="recipe">diffuse(patch + noise) -&gt; ε-pred + ε-loss（→ 3D CT）</code><br>
+<code class="recipe">diffuse(patch + noise) -&gt; $\varepsilon$-pred + $\varepsilon$-loss（→ 3D CT）</code><br>
 <span class="idea"><span class="p">问题</span> 医疗体数据生成保真难；<span class="p">方法</span> 文字（临床报告）引导 + 解剖感知；<span class="p">核心</span> 高保真 3D 肺部 CT 生成（医疗应用早期代表）。</span></p>
 
 <p class="paper"><b>Beyond Pixels</b>（<a href="https://arxiv.org/abs/2608.10744">2608.10744</a>）<br>
@@ -449,18 +451,6 @@ body.lv1 .note, body.lv2 .note { display:none; }
 
 </main>
 
-<script>
-(function(){
-  var btns = Array.prototype.slice.call(document.querySelectorAll('.lvbtn'));
-  function setLv(lv){
-    document.body.classList.remove('lv1','lv2','lv3');
-    document.body.classList.add('lv'+lv);
-    btns.forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-lv')===lv); });
-  }
-  btns.forEach(function(b){ b.addEventListener('click', function(){ setLv(b.getAttribute('data-lv')); }); });
-  setLv('2');
-})();
-</script>
-
+<script src="../assets/js/main.js" defer></script>
 </body>
 </html>

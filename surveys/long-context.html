@@ -43,6 +43,8 @@ body.lv1 .paper { display:none; }
 body.lv1 .deep .paper { display:block; }
 body.lv1 .note, body.lv2 .note { display:none; }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/Temml-Local.min.css">
+<script src="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/temml.min.js" defer></script>
 </head>
 <body>
 <main class="container">
@@ -62,9 +64,9 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <p>长上下文要同时回答四件事：<b>注意力怎么算</b>（复杂度）、<b>KV 怎么存</b>（显存）、<b>长度怎么外推</b>（位置编码）、<b>怎么客观测出真实长度</b>（benchmark）。配方围绕这四轴：</p>
 <table>
 <tr><th>记号</th><th>意思</th></tr>
-<tr><td><code>dense</code></td><td>全注意力（每 token 看所有历史），O(n²)，精确但贵</td></tr>
+<tr><td><code>dense</code></td><td>全注意力（每 token 看所有历史），$O(n^2)$，精确但贵</td></tr>
 <tr><td><code>sparse</code></td><td>稀疏注意力：滑窗 / 全局 / 随机 / block / landmark / 检索，子平方</td></tr>
-<tr><td><code>linear / ssm</code></td><td>线性注意力 / 状态空间模型，O(n)，详见 <a href="linear-attention.html">linear-attention.html</a></td></tr>
+<tr><td><code>linear / ssm</code></td><td>线性注意力 / 状态空间模型，$O(n)$，详见 <a href="linear-attention.html">linear-attention.html</a></td></tr>
 <tr><td><code>flash / paged</code></td><td>不改变数学、只优化实现：IO 感知（FlashAttention）/ 分页 KV（PagedAttention）</td></tr>
 <tr><td><code>evict / compress</code></td><td>KV 驱逐 / 压缩：按分数丢掉不重要的 KV，省显存</td></tr>
 <tr><td><code>sink</code></td><td>attention sink：保留/学习几个「吸收注意力」的 sink token</td></tr>
@@ -75,7 +77,7 @@ body.lv1 .note, body.lv2 .note { display:none; }
 
 <h2>1. 主线：五条并行的战线，最后都指向「混合」</h2>
 <ol>
-<li><b>算得起（复杂度）</b>：dense O(n²) 太贵 → 稀疏注意力（Sparse Transformer / Longformer / BigBird）→ 硬件高效实现（FlashAttention）→ 原生稀疏（NSA / HiLS）。</li>
+<li><b>算得起（复杂度）</b>：dense $O(n^2)$ 太贵 → 稀疏注意力（Sparse Transformer / Longformer / BigBird）→ 硬件高效实现（FlashAttention）→ 原生稀疏（NSA / HiLS）。</li>
 <li><b>存得下（显存）</b>：KV 缓存随长度线性涨 → 分页管理（PagedAttention）→ 驱逐/压缩（H2O / SnapKV / DMC / YoCo）。</li>
 <li><b>够得着（外推）</b>：RoPE 直接外推会崩 → Position Interpolation → YaRN / LongRoPE / Self-Extend / PoSE，把 4K 模型外推到 128K/1M。</li>
 <li><b>绕得过（sink）</b>：StreamingLLM 发现 attention sink 是个「bug」→ GPT-OSS 内置 sink 参数、Gated Attention 门控消除 sink。</li>
@@ -84,22 +86,22 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <p>三条并行轴在收敛：<b>注意力复杂度</b>（dense → sparse → linear → hybrid）、<b>KV 记忆</b>（full → evict → compress → sparse-access）、<b>长度外推</b>（RoPE → PI → YaRN/HoPE → sink-free）。交点是一个开放问题：<b>长上下文到底靠「便宜的压缩」（线性/驱逐）还是「贵的精确」（稀疏/全注意力）？</b> 2025 起的答案是「混合」。</p>
 
 <h2>2. 源头与地基（2020-2023：先让长序列「算得动」）</h2>
-<p class="trend">在「上下文窗口」成为卖点之前，第一代工作只求一件事：让注意力在长序列上<b>跑得动</b>。两条腿：一是稀疏化注意力（Sparse Transformer、Reformer、Longformer、BigBird），二是优化实现而不改数学（FlashAttention 1/2/3、PagedAttention）。这一代的遗产是——「注意力不必是 O(n²)」，为后面所有稀疏/线性路线铺路。</p>
+<p class="trend">在「上下文窗口」成为卖点之前，第一代工作只求一件事：让注意力在长序列上<b>跑得动</b>。两条腿：一是稀疏化注意力（Sparse Transformer、Reformer、Longformer、BigBird），二是优化实现而不改数学（FlashAttention 1/2/3、PagedAttention）。这一代的遗产是——「注意力不必是 $O(n^2)$」，为后面所有稀疏/线性路线铺路。</p>
 
 <p class="paper"><b>Sparse Transformer</b>（<a href="https://arxiv.org/abs/1904.10509">1904.10509</a>，Child et al. 2019）<br>
-<code class="recipe">sparse(strided + fixed) -&gt; O(n√n) [稀疏注意力分解]</code><br>
-<span class="idea"><span class="p">问题</span> 注意力时间/显存随长度平方涨；<span class="p">方法</span> 把注意力矩阵分解成 strided（跨步）和 fixed（固定局部）两种稀疏模式，复杂度降到 O(n√n)；<span class="p">核心</span> 稀疏注意力的开山，最早把长序列（图像/音频/文本）做成可行。</span></p>
+<code class="recipe">sparse(strided + fixed) -&gt; $O(n\sqrt{n})$ [稀疏注意力分解]</code><br>
+<span class="idea"><span class="p">问题</span> 注意力时间/显存随长度平方涨；<span class="p">方法</span> 把注意力矩阵分解成 strided（跨步）和 fixed（固定局部）两种稀疏模式，复杂度降到 $O(n\sqrt{n})$；<span class="p">核心</span> 稀疏注意力的开山，最早把长序列（图像/音频/文本）做成可行。</span></p>
 
 <p class="paper"><b>Reformer</b>（<a href="https://arxiv.org/abs/2001.04451">2001.04451</a>，Kitaev et al. 2020）<br>
-<code class="recipe">sparse(LSH) + reversible -&gt; O(n log n) [局部敏感哈希 + 可逆残差]</code><br>
-<span class="idea"><span class="p">问题</span> 全注意力在长序列上算不动、且要存激活；<span class="p">方法</span> 用局部敏感哈希（LSH）只让相似 token 互相注意，配可逆残差省激活内存；<span class="p">核心</span> 「哈希近似注意力」路线，复杂度 O(n log n)。</span></p>
+<code class="recipe">sparse(LSH) + reversible -&gt; $O(n \log n)$ [局部敏感哈希 + 可逆残差]</code><br>
+<span class="idea"><span class="p">问题</span> 全注意力在长序列上算不动、且要存激活；<span class="p">方法</span> 用局部敏感哈希（LSH）只让相似 token 互相注意，配可逆残差省激活内存；<span class="p">核心</span> 「哈希近似注意力」路线，复杂度 $O(n \log n)$。</span></p>
 
 <p class="paper"><b>Longformer</b>（<a href="https://arxiv.org/abs/2004.05150">2004.05150</a>，Beltagy et al. 2020）<br>
-<code class="recipe">sparse(滑窗 + 全局 + 膨胀) -&gt; O(n) [三种稀疏模式组合]</code><br>
-<span class="idea"><span class="p">问题</span> 长文档（数千 token）放不进全注意力；<span class="p">方法</span> 组合滑动窗口、任务相关的全局 token、膨胀窗口三种稀疏模式；<span class="p">核心</span> O(n) 复杂度，成为长文档 NLP 的常用底座。</span></p>
+<code class="recipe">sparse(滑窗 + 全局 + 膨胀) -&gt; $O(n)$ [三种稀疏模式组合]</code><br>
+<span class="idea"><span class="p">问题</span> 长文档（数千 token）放不进全注意力；<span class="p">方法</span> 组合滑动窗口、任务相关的全局 token、膨胀窗口三种稀疏模式；<span class="p">核心</span> $O(n)$ 复杂度，成为长文档 NLP 的常用底座。</span></p>
 
 <p class="paper"><b>BigBird</b>（<a href="https://arxiv.org/abs/2007.14062">2007.14062</a>，Zaheer et al. 2020）<br>
-<code class="recipe">sparse(随机 + 滑窗 + 全局) -&gt; O(n) [随机图 + 局部 + 全局]</code><br>
+<code class="recipe">sparse(随机 + 滑窗 + 全局) -&gt; $O(n)$ [随机图 + 局部 + 全局]</code><br>
 <span class="idea"><span class="p">问题</span> 稀疏注意力凭什么能替代全注意力；<span class="p">方法</span> 用随机、滑窗、全局三类边的稀疏图，并给出理论（稀疏注意力在图灵完备性上的等价刻画）；<span class="p">核心</span> 既省算力又给出理论保证，稀疏注意力的代表性理论工作。</span></p>
 
 <div class="deep">
@@ -297,14 +299,14 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <span class="idea"><span class="p">问题</span> RoPE 的长期衰减让远处 token 交互变弱；<span class="p">方法</span> 只保留 RoPE 的高频分量、去掉低频，从理论打破长期衰减；<span class="p">核心</span> 位置编码与「长期衰减」解耦。</span></p>
 
 <h2>7. 线性注意力 / SSM（另一条路）</h2>
-<p class="trend">不稀疏化、也不驱逐，而是换掉 softmax 注意力本身，把复杂度从 O(n²) 压到 O(n)：RWKV 走 RNN 递推，Mamba 走选择性状态空间，Mamba-2 用 SSD 证明「SSM 和注意力是一家」。这条线的完整演进（DeltaNet / Gated DeltaNet / TTT / Titans，以及 Kimi K3、Qwen3-Next 的混合旗舰）单独成篇，见 <a href="linear-attention.html">linear-attention.html</a>。</p>
+<p class="trend">不稀疏化、也不驱逐，而是换掉 softmax 注意力本身，把复杂度从 $O(n^2)$ 压到 $O(n)$：RWKV 走 RNN 递推，Mamba 走选择性状态空间，Mamba-2 用 SSD 证明「SSM 和注意力是一家」。这条线的完整演进（DeltaNet / Gated DeltaNet / TTT / Titans，以及 Kimi K3、Qwen3-Next 的混合旗舰）单独成篇，见 <a href="linear-attention.html">linear-attention.html</a>。</p>
 
 <p class="paper"><b>RWKV</b>（<a href="https://arxiv.org/abs/2305.13048">2305.13048</a>，Peng et al. 2023）<br>
-<code class="recipe">linear(RNN) -&gt; O(n) [WKV 线性注意力]</code><br>
-<span class="idea"><span class="p">问题</span> Transformer 是 O(n²)；<span class="p">方法</span> 把注意力改成可 RNN 递推的线性形式；<span class="p">核心</span> 独立提出的 O(n) LLM 路线。</span></p>
+<code class="recipe">linear(RNN) -&gt; $O(n)$ [WKV 线性注意力]</code><br>
+<span class="idea"><span class="p">问题</span> Transformer 是 $O(n^2)$；<span class="p">方法</span> 把注意力改成可 RNN 递推的线性形式；<span class="p">核心</span> 独立提出的 $O(n)$ LLM 路线。</span></p>
 
 <p class="paper"><b>Mamba（Selective SSM）</b>（<a href="https://arxiv.org/abs/2312.00752">2312.00752</a>，Gu &amp; Dao 2023）<br>
-<code class="recipe">ssm(selective) -&gt; O(n) [输入依赖状态转移]</code><br>
+<code class="recipe">ssm(selective) -&gt; $O(n)$ [输入依赖状态转移]</code><br>
 <span class="idea"><span class="p">问题</span> 经典 SSM 转移矩阵固定、表达力弱；<span class="p">方法</span> 让转移参数依赖输入（选择性 SSM）+ 硬件感知算法；<span class="p">核心</span> SSM 路线复兴，线性复杂度 + 内容感知。</span></p>
 
 <h2>8. 长上下文训练（怎么把 4K 训成 128K/1M）</h2>
@@ -394,7 +396,7 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <h2>10. 共识与分歧（速记版）</h2>
 <p><b>共识：</b></p>
 <ol>
-<li>注意力不必是 O(n²)：稀疏（Sparse Transformer → NSA/HiLS）和硬件高效实现（FlashAttention）都已成熟，长序列「算得动」不再是问题。</li>
+<li>注意力不必是 $O(n^2)$：稀疏（Sparse Transformer → NSA/HiLS）和硬件高效实现（FlashAttention）都已成熟，长序列「算得动」不再是问题。</li>
 <li>attention sink 已被「内置 sink 参数」（GPT-OSS）或「门控消除 sink」（Gated Attention）两个方向解决，不再是瓶颈。</li>
 <li>KV 是主要显存瓶颈，驱逐/压缩（H2O → SnapKV/DMC/YoCo）和分页管理（PagedAttention）是免训的实用路线。</li>
 <li>位置外推（PI → YaRN → LongRoPE）能把 4K 模型低成本拉到 128K/2M，但天花板有限。</li>
@@ -414,18 +416,6 @@ body.lv1 .note, body.lv2 .note { display:none; }
 
 </main>
 
-<script>
-(function(){
-  var btns = Array.prototype.slice.call(document.querySelectorAll('.lvbtn'));
-  function setLv(lv){
-    document.body.classList.remove('lv1','lv2','lv3');
-    document.body.classList.add('lv'+lv);
-    btns.forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-lv')===lv); });
-  }
-  btns.forEach(function(b){ b.addEventListener('click', function(){ setLv(b.getAttribute('data-lv')); }); });
-  setLv('2');
-})();
-</script>
-
+<script src="../assets/js/main.js" defer></script>
 </body>
 </html>
