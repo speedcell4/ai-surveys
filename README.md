@@ -6,7 +6,7 @@
 - [统一多模态模型速览](surveys/unified-multimodal.html) — 理解 + 生成统一模型，Tuna 家族深读，18 篇
 - [Grammar Induction / Unsupervised Parsing 速览](surveys/grammar-induction.html) — 无监督句法分析，2010 ~ 2026，81 篇
 - [长上下文（Long Context）速览](surveys/long-context.html) — 稀疏/硬件高效注意力、attention sink、KV 驱逐与压缩、位置外推、训练与 benchmark，2020 ~ 2026，65 篇
-- [线性注意力速览](surveys/linear-attention.html) — kernel 线性 / SSM / delta / TTT / Titans + Qwen3-Next、Kimi K3、Ling-3.0-flash、ByteDance SSE 混合旗舰，2020 ~ 2026，37 篇
+- [线性注意力速览](surveys/linear-attention.html) — kernel 线性 / SSM / delta / TTT / Titans + Qwen3-Next、Kimi K3 混合旗舰 + RWKV / fla 算法谱系，2020 ~ 2026，59 篇
 - [稀疏注意力速览](surveys/sparse-attention.html) — 选 block 还是选 token + DeepSeek NSA/DSA/CSA/HCA + 厂商落地，2019 ~ 2026，26 篇
 - [递归自我改进速览](surveys/recursive-self-improvement.html) — 自训练 / 自奖励 / 自博弈 / 自纠正 / 弱到强 + AI Scientist、AlphaEvolve，2003 ~ 2026，27 篇
 - [LLM 强化学习速览](surveys/llm-rl.html) — GRPO → GSPO/GEPO → DAPO + credit assignment + OPD/OPSD/MOPD，2017 ~ 2026，20 篇
