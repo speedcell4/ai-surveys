@@ -8,6 +8,7 @@
 - [长上下文（Long Context）速览](surveys/long-context.html) — 稀疏/硬件高效注意力、attention sink、KV 驱逐与压缩、位置外推、训练与 benchmark，2020 ~ 2026，65 篇
 - [线性注意力速览](surveys/linear-attention.html) — kernel 线性 / SSM / delta / TTT / Titans + Qwen3-Next、Kimi K3 混合旗舰，2020 ~ 2026，33 篇
 - [稀疏注意力速览](surveys/sparse-attention.html) — 选 block 还是选 token + DeepSeek NSA/DSA/CSA/HCA，2019 ~ 2026，18 篇
+- [递归自我改进速览](surveys/recursive-self-improvement.html) — 自训练 / 自奖励 / 自博弈 / 自纠正 / 弱到强 + AI Scientist、AlphaEvolve，2003 ~ 2026，27 篇
 
 > 新增论文/续写速览前，先读 [AGENTS.md](AGENTS.md)，里面是这套「配方 + 一句话」格式的完整规范。
 

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>递归自我改进速览</title>
+<style>
+:root { --accent:#047857; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#ecfdf5; }
+* { box-sizing: border-box; }
+body { margin:0; background:#fafafa; color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  line-height:1.75; font-size:16px; }
+.container { max-width:940px; margin:0 auto; padding:44px 28px 96px; background:#fff; box-shadow:0 0 0 1px var(--border); min-height:100vh; }
+h1 { font-size:1.75em; line-height:1.35; border-bottom:2px solid var(--accent); padding-bottom:.4em; margin:.1em 0 .2em; }
+.sub { color:var(--muted); margin-top:0; }
+h2 { font-size:1.32em; margin-top:2.2em; border-bottom:1px solid var(--border); padding-bottom:.3em; }
+h3 { font-size:1.1em; margin-top:1.8em; color:#111827; }
+a { color:var(--accent); text-decoration:none; }
+a:hover { text-decoration:underline; }
+table { width:100%; border-collapse:collapse; margin:1.2em 0; font-size:.94em; }
+th,td { border:1px solid var(--border); padding:.5em .75em; text-align:left; vertical-align:top; }
+th { background:#ecfdf5; }
+tr:nth-child(even) td { background:#fafafa; }
+blockquote { border-left:4px solid var(--accent); margin:1.2em 0; padding:.5em 1em; background:var(--bg); color:#374151; border-radius:0 6px 6px 0; }
+.paper { margin:1.25em 0; }
+.paper b { color:#111827; }
+code.recipe { display:inline-block; margin:.4em 0; background:var(--bg); border-left:3px solid var(--accent); padding:.34em .72em; border-radius:5px; font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:.9em; color:#111827; }
+.idea { color:#374151; }
+.idea .p { color:#b91c1c; font-weight:600; }
+.trend { color:#374151; background:#ecfdf5; border-left:3px solid #047857; padding:.55em .85em; border-radius:5px; margin:.55em 0 1.1em; }
+.deep { background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; padding:.1em 1em .5em; margin:1em 0; }
+hr { border:none; border-top:1px solid var(--border); margin:2.2em 0; }
+.note { color:var(--muted); font-size:.9em; }
+ol,ul { padding-left:1.5em; }
+li { margin:.35em 0; }
+@media (max-width:640px){ .container{padding:28px 16px 64px;} body{font-size:15px;} }
+</style>
+</head>
+<body>
+<main class="container">
+
+<h1>递归自我改进速览（Recursive Self-Improvement，2003 ~ 2026）</h1>
+<p class="sub">让模型用自己的经验、自己的裁判、自己的输出来「自我进化」· 核心问题是<b>谁来当老师、信号从哪来</b> · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话（问题 / 方法 / 核心）</p>
+
+<h2>0. 记法（这个领域的「最大公约数」）</h2>
+<p>递归自我改进（RSI）= 模型在（几乎）没有人类输入的条件下，把经验转化为能力提升。所有方法最终都落在两个问题上：<b>谁提供监督信号</b>（人类 / 自己 / 对手 / 外部验证器），以及<b>改进什么</b>（数据 / 奖励 / 策略 / 答案）。配方围绕这两轴：</p>
+<table>
+<tr><th>记号</th><th>意思</th></tr>
+<tr><td><code>self-train</code></td><td>自训练：模型生成数据/标签，再训练自己（bootstrap）</td></tr>
+<tr><td><code>self-reward</code></td><td>自奖励：模型当自己的裁判（LLM-as-judge）打分</td></tr>
+<tr><td><code>self-play</code></td><td>自博弈：两份模型互相对抗/竞争（博弈论）</td></tr>
+<tr><td><code>self-correct</code></td><td>自纠正：模型改写自己的答案（生成→反馈→精修）</td></tr>
+<tr><td><code>self-verify</code></td><td>自验证：模型核对自己的答案</td></tr>
+<tr><td><code>weak→strong</code></td><td>弱到强：弱模型监督强模型</td></tr>
+<tr><td><code>verifier</code></td><td>外部可验证信号（代码能跑 / 答案可判定），最可靠</td></tr>
+<tr><td><code>proxy-judge / reward-hack</code></td><td>代理裁判（易被利用）/ 奖励黑客（钻空子）</td></tr>
+</table>
+<p>配方格式：<code>方法(谁当老师) -&gt; 产出 + 信号/目标</code>。例：<code>Self-Rewarding: self-reward -&gt; 对齐 + LLM-as-judge 迭代</code>。</p>
+<blockquote>一句话看懂整个领域：<b>有外部验证器（verifier）时，自我改进最可靠</b>（代码、数学、游戏）；<b>没有验证器时</b>，模型只能自己当裁判（self-reward / self-play），于是陷入「裁判自己会偏、会奖励黑客」的困境——这是整个领域最大的分歧点。</blockquote>
+
+<h2>1. 主线：谁当老师，决定了自我改进靠不靠谱</h2>
+<ol>
+<li><b>理论起源（2003）</b>：Gödel Machine 提出「自指、可证明最优」的自我改写机器——只在「可证明有益」时才改自己的代码。</li>
+<li><b>自博弈起源（2017）</b>：AlphaZero 用 self-play RL 从零自我对弈，超越人类，证明「对手 + 胜负信号」是干净的自我改进。</li>
+<li><b>LLM 自训练（2022-2023）</b>：Self-Instruct / STaR / ReST 让模型自己生成数据再训练自己，把「监督信号」从人类搬到模型自身。</li>
+<li><b>自奖励 / 自博弈（2024）</b>：Self-Rewarding / SPIN / SPPO 让模型当自己的裁判或对手，但暴露「裁判会偏、会奖励黑客」。</li>
+<li><b>自纠正的冷水与救赎（2023-2024）</b>：发现 LLM 靠自己「自我纠正」其实不 work（Cannot Self-Correct），SCoRe 用 RL 训练把它重新救回来。</li>
+<li><b>现代 RSI / 自动化研究（2024-2026）</b>：AI Scientist / AlphaEvolve 把自我改进变成「自动化科研」，G-Zero / Tool-R0 探索无验证器的 open-ended 自我进化。</li>
+</ol>
+<p>一条主轴贯穿始终：<b>监督信号的可信度</b>——verifier（可靠）→ self-play（较可靠）→ self-reward / proxy-judge（易偏、易被黑）。交点是一个开放问题：<b>没有外部验证器时，自我改进会不会「转圈」而非「升级」？</b></p>
+
+<h2>2. 先读这篇（综述）</h2>
+<p class="trend">按规范先读 survey。这篇是 Schmidhuber 团队 97 页的「现代 agent 系统自我改进」综述，把 RSI 从概念一路整理到 2025-2026 的落地系统，是建立地图的入口。</p>
+
+<div class="deep">
+<p class="paper"><b>Self-Improvements in Modern Agentic Systems: A Survey</b>（<a href="https://arxiv.org/abs/2607.13104">2607.13104</a>，Schmidhuber 等 2026）<br>
+<code class="recipe">survey(agent 自我进化) -&gt; 系统级分类 + 能力积累视角 [经验 → 能力增益]</code><br>
+<span class="idea"><span class="p">问题</span> 自我改进被滥用、指代混乱（有时指继续训练、有时指 prompt/工具优化）；<span class="p">方法</span> 把自我改进 agent 定义成「把经验转换成能力增益」的自适应系统，给系统级分类；<span class="p">核心</span> 这个领域的权威综述，统一术语 + 给出 2025-2026 的完整地图。</span></p>
+</div>
+
+<h2>3. 理论起源（自我改写 + 自博弈）</h2>
+<p class="trend">RSI 的两个根：一是 Schmidhuber 的 Gödel Machine——理论上「可证明最优」的自我改写；二是 AlphaZero——用 self-play 和胜负信号在博弈里做到真正的自我进化。前者给概念、后者给可工作的范式。</p>
+
+<div class="deep">
+<p class="paper"><b>Gödel Machine（Self-Referential Universal Problem Solvers）</b>（<a href="https://arxiv.org/abs/cs/0309048">cs/0309048</a>，Schmidhuber 2003）<br>
+<code class="recipe">self-rewrite(可证明) -&gt; 最优自我改进 [只改「可证明有益」的代码]</code><br>
+<span class="idea"><span class="p">问题</span> 一个系统怎么安全地改写自己的任意代码；<span class="p">方法</span> 自指机器：用证明搜索找到「可证明提高效用」的自我改写才执行，没有不可改的软件；<span class="p">核心</span> RSI 的理论源头——把「自我改进」定义成「可证明最优」，是整个领域概念的锚点。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>AlphaZero（Mastering Chess and Shogi by Self-Play）</b>（<a href="https://arxiv.org/abs/1712.01815">1712.01815</a>，Silver et al. 2017）<br>
+<code class="recipe">self-play + MCTS -&gt; 从零超越人类 [胜负信号 + 通用 RL]</code><br>
+<span class="idea"><span class="p">问题</span> 不靠人类棋谱能不能从零学会下棋；<span class="p">方法</span> 自我对弈 + 蒙特卡洛树搜索 + 通用 RL，只用「赢/输」当信号；<span class="p">核心</span> 证明「对手 + 胜负信号」是干净、可扩展的自我改进，为 LLM 时代的 self-play 提供模板。</span></p>
+</div>
+
+<h2>4. 自训练 / 合成数据（把监督信号从人类搬到模型）</h2>
+<p class="trend">第一波 LLM 自我改进：模型自己生成数据或标签，再训练自己。核心矛盾是「自生成数据有噪声，怎么过滤」。代表：Self-Instruct 生成指令、STaR 用「答对题」当过滤器、ReST 用奖励筛选样本、Quiet-STaR 学会「先想再说」。</p>
+
+<p class="paper"><b>Self-Instruct</b>（<a href="https://arxiv.org/abs/2212.10560">2212.10560</a>，Wang et al. 2022）<br>
+<code class="recipe">self-train(指令) -&gt; 指令跟随 [自生成 + 自过滤]</code><br>
+<span class="idea"><span class="p">问题</span> 指令微调依赖人工标注、贵且有限；<span class="p">方法</span> 让模型自己生成「指令 + 输出」，过滤后微调自己，循环 bootstrap；<span class="p">核心</span> 自训练开山，GPT-4 级别的指令跟随就是从这来的。</span></p>
+
+<p class="paper"><b>STaR（Self-Taught Reasoner）</b>（<a href="https://arxiv.org/abs/2203.14465">2203.14465</a>，Zelikman et al. 2022）<br>
+<code class="recipe">self-train(推理) -&gt; 学会推理 [答对才留 rationale]</code><br>
+<span class="idea"><span class="p">问题</span> 没有推理链标注怎么学会推理；<span class="p">方法</span> 让模型生成 rationale，只保留「得到正确答案」的，再用它微调自己、迭代；<span class="p">核心</span> 用「答案对不对」当过滤器 bootstrap 推理能力，是 R1 之前自我推理的雏形。</span></p>
+
+<p class="paper"><b>ReST（Reinforced Self-Training）</b>（<a href="https://arxiv.org/abs/2308.08998">2308.08998</a>，Gulcehre et al. 2023）<br>
+<code class="recipe">self-train(奖励过滤) -&gt; 迭代提升 [采样 → 奖励过滤 → 微调]</code><br>
+<span class="idea"><span class="p">问题</span> 自训练怎么把「奖励信号」和「数据生成」结合；<span class="p">方法</span> 从当前策略采样，用奖励函数过滤高分样本，再 SFT，循环；<span class="p">核心</span> 把自训练变成「采样-过滤-微调」的通用循环，是很多 RL 后训练的骨架。</span></p>
+
+<p class="paper"><b>LMSI（LLMs Can Self-Improve）</b>（<a href="https://arxiv.org/abs/2210.11610">2210.11610</a>，Huang et al. 2022）<br>
+<code class="recipe">self-train(自标签) -&gt; 无监督提升 [自生成标签 + 置信度筛选]</code><br>
+<span class="idea"><span class="p">问题</span> 没有外部标签时 LLM 能不能自我提升；<span class="p">方法</span> 用模型自生成的标签（如推理/蕴含判断）+ 置信度筛选再训练；<span class="p">核心</span> 最早系统论证「LLM 能靠自己的标签提升」，是 self-training 概念的实证起点。</span></p>
+
+<p class="paper"><b>Quiet-STaR</b>（<a href="https://arxiv.org/abs/2403.09629">2403.09629</a>，Zelikman et al. 2024）<br>
+<code class="recipe">self-train(思考) -&gt; 每个 token 前先想 [内部 rationale + REINFORCE]</code><br>
+<span class="idea"><span class="p">问题</span> 推理不该只在「答推理题」时发生，应该处处发生；<span class="p">方法</span> 让模型在每个 token 前生成隐式「思考」，用 REINFORCE 奖励「想了之后更能预测下文」；<span class="p">核心</span> 把「先想再说」变成通用能力，是 o1/R1 里「思考 token」的先声。</span></p>
+
+<h2>5. 自奖励 / 自博弈（自己当裁判、当对手）</h2>
+<p class="trend">没有人类标注时，模型要么当自己的裁判（self-reward）、要么当自己的对手（self-play）。这波把 RSI 从「生成数据」升级到「生成偏好信号」，但也暴露了核心病：<b>裁判自己会偏、会奖励黑客</b>。代表：Self-Rewarding 用 LLM-as-judge，SPIN/SPPO/DNO 用博弈，Meta-Rewarding 给裁判再加一层裁判，Constitutional AI / RLAIF 用原则/AI 反馈替代人类偏好。</p>
+
+<div class="deep">
+<p class="paper"><b>Self-Rewarding Language Models</b>（<a href="https://arxiv.org/abs/2401.10020">2401.10020</a>，Yuan et al. 2024，Meta）<br>
+<code class="recipe">self-reward -&gt; 生成 + 裁判二合一 [LLM-as-judge 迭代]</code><br>
+<span class="idea"><span class="p">问题</span> RLHF 卡在「人类偏好数据有限、还跟不上模型变强」；<span class="p">方法</span> 让同一个模型既生成候选、又当裁判打分，用自判偏好做 DPO 微调，下一轮更强、裁判也更准；<span class="p">核心</span> 开「自奖励」一派，证明模型能靠自判迭代提升，但也埋下「裁判偏见」的雷。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>SPIN（Self-Play Fine-Tuning）</b>（<a href="https://arxiv.org/abs/2401.01335">2401.01335</a>，Chen et al. 2024）<br>
+<code class="recipe">self-play -&gt; 弱模型变强 [主玩家 vs 上一轮对手]</code><br>
+<span class="idea"><span class="p">问题</span> 只有弱模型 + 无外部标注，怎么把它变强；<span class="p">方法</span> 自博弈微调：当前模型当「主玩家」、上一轮模型当「对手」，主玩家要能区分自己的回答和对手的回答；<span class="p">核心</span> 用博弈视角把「弱监督下的提升」做成可训练目标，理论上有保证。</span></p>
+</div>
+
+<p class="paper"><b>SPPO（Self-Play Preference Optimization）</b>（<a href="https://arxiv.org/abs/2405.00675">2405.00675</a>，Wu et al. 2024）<br>
+<code class="recipe">self-play -&gt; 逼近纳什均衡 [偏好概率 + 常数学习率]</code><br>
+<span class="idea"><span class="p">问题</span> Bradley-Terry 假设掩盖了人类偏好的非传递性/非理性；<span class="p">方法</span> 直接用偏好概率做自博弈，用常数学习率逼近双方策略的纳什均衡；<span class="p">核心</span> 自博弈对齐的理论化，比 RLHF 更准地反映真实偏好。</span></p>
+
+<p class="paper"><b>DNO（Direct Nash Optimization）</b>（<a href="https://arxiv.org/abs/2404.03715">2404.03715</a>，Rosset et al. 2024）<br>
+<code class="recipe">self-play -&gt; 迭代自我改进 [oracle 偏好 + 纳什均衡]</code><br>
+<span class="idea"><span class="p">问题</span> 后训练怎么用 oracle 偏好让模型「自己和自己迭代变强」；<span class="p">方法</span> 用强 oracle 的偏好做 general-sum 博弈，直接优化纳什均衡，不先学奖励模型；<span class="p">核心</span> 证明「自我改进」在数学/代码上真能迭代涨点。</span></p>
+
+<p class="paper"><b>Meta-Rewarding Language Models</b>（<a href="https://arxiv.org/abs/2407.19594">2407.19594</a>，2024）<br>
+<code class="recipe">self-reward(元裁判) -&gt; 修裁判偏见 [评判「裁判的裁判」]</code><br>
+<span class="idea"><span class="p">问题</span> 自奖励里裁判自己也偏，谁来纠偏；<span class="p">方法</span> 加一层「元裁判」——评判裁判判得好不好，把「评判裁判」也当成可训练奖励；<span class="p">核心</span> 直击 self-reward 的病根，是自奖励路线的自我修正。</span></p>
+
+<p class="paper"><b>Constitutional AI</b>（<a href="https://arxiv.org/abs/2212.08073">2212.08073</a>，Bai et al. 2022，Anthropic）<br>
+<code class="recipe">self-correct + rlaif -&gt; 无害 [原则自批评 + AI 反馈]</code><br>
+<span class="idea"><span class="p">问题</span> 训练无害模型不能只靠「人类标注哪些有害」，太慢太贵；<span class="p">方法</span> 用一套「宪法原则」让模型自我批评、自我修订有害输出，再用 AI 反馈做 RL；<span class="p">核心</span> 把「人类偏好」替换成「原则 + AI 反馈」，RLAIF 的奠基。</span></p>
+
+<p class="paper"><b>RLAIF vs. RLHF</b>（<a href="https://arxiv.org/abs/2309.00267">2309.00267</a>，Lee et al. 2023）<br>
+<code class="recipe">rlaif -&gt; 追平 RLHF [AI 反馈替代人类偏好]</code><br>
+<span class="idea"><span class="p">问题</span> RLHF 的人类偏好数据贵、不可扩展；<span class="p">方法</span> 系统对比：用 LLM 生成的偏好替代人类偏好做 RL，发现两者效果相当；<span class="p">核心</span> 证明「AI 当裁判」在规模上可行，为 self-reward/self-play 提供合法性。</span></p>
+
+<p class="paper"><b>Self-Taught Evaluators</b>（<a href="https://arxiv.org/abs/2408.02666">2408.02666</a>，Wang et al. 2024，Meta）<br>
+<code class="recipe">self-train(评估器) -&gt; 免人类标注的评估器 [合成对比数据迭代]</code><br>
+<span class="idea"><span class="p">问题</span> 训练奖励/评估模型要大量人类偏好、还随模型变强而过时；<span class="p">方法</span> 用合成对比数据迭代训练评估器，从种子模型 bootstrap，全程不靠人类标注；<span class="p">核心</span> 「评估器也能自我教」——RewardBench 上超过用人类数据训的评估器。</span></p>
+
+<h2>6. 自纠正 / 自验证（改自己的答案）</h2>
+<p class="trend">自纠正听起来最直觉：生成 → 自己挑错 → 改。但 2023 年一篇冷水（Cannot Self-Correct）发现它其实不 work，甚至越改越差。SCoRe 用 RL 训练把「自我纠正」变成真能力。核心教训：<b>自我纠正不是免费的，要么有外部反馈、要么专门训练</b>。</p>
+
+<p class="paper"><b>Self-Refine（Iterative Refinement with Self-Feedback）</b>（<a href="https://arxiv.org/abs/2303.17651">2303.17651</a>，Madaan et al. 2023）<br>
+<code class="recipe">self-correct -&gt; 免训练迭代精修 [生成 → 自反馈 → 精修]</code><br>
+<span class="idea"><span class="p">问题</span> 生成质量能不能靠「自己给自己反馈」提上去，而不改模型；<span class="p">方法</span> 同一个模型生成、给自己反馈、再精修，循环；<span class="p">核心</span> 免训练的自我精修，多任务上比一次性生成更好。</span></p>
+
+<p class="paper"><b>Reflexion（Verbal Reinforcement Learning）</b>（<a href="https://arxiv.org/abs/2303.11366">2303.11366</a>，Shinn et al. 2023）<br>
+<code class="recipe">self-correct + 记忆 -&gt; 从失败学 [口头反思 + 记忆重试]</code><br>
+<span class="idea"><span class="p">问题</span> agent 失败后只会重试、不会「复盘」；<span class="p">方法</span> 把失败经验写成「口头反思」存进记忆，下次带着反思重试；<span class="p">核心</span> 语言 agent 的「从错误中学习」，把 RL 的试错换成自然语言。</span></p>
+
+<p class="paper"><b>Self-Verification</b>（<a href="https://arxiv.org/abs/2212.09561">2212.09561</a>，Weng et al. 2022）<br>
+<code class="recipe">self-verify -&gt; 更稳的推理 [反向验证 / 多步核对]</code><br>
+<span class="idea"><span class="p">问题</span> 一次性生成推理易错、无冗余；<span class="p">方法</span> 让模型验证自己的结论（反向验证、多步一致性）；<span class="p">核心</span> 「自我核对」早期代表，用投票/验证提稳。</span></p>
+
+<div class="deep">
+<p class="paper"><b>LLMs Cannot Self-Correct Reasoning Yet</b>（<a href="https://arxiv.org/abs/2310.01798">2310.01798</a>，Huang et al. 2023）<br>
+<code class="recipe">analysis -&gt; 自我纠正不 work [无外部反馈会退化]</code><br>
+<span class="idea"><span class="p">问题</span> 自纠正到底有没有用；<span class="p">方法</span> 系统实验发现：没有外部反馈时，LLM 无法自我纠正推理，甚至越改越差；<span class="p">核心</span> 给自纠正泼冷水，划出「自我改进」的红线——信号得来自外部。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>SCoRe（Train LMs to Self-Correct via RL）</b>（<a href="https://arxiv.org/abs/2409.12917">2409.12917</a>，Kumar et al. 2024，Google）<br>
+<code class="recipe">self-correct(rl 训练) -&gt; 真会自我纠正 [两阶段：初始化 + 强化]</code><br>
+<span class="idea"><span class="p">问题</span> 自纠正被证明无效，但它是可训练能力吗；<span class="p">方法</span> 两阶段：先训练模型「在第一次就出错」（暴露可纠正的错），再用 RL 强化「第二次能改对」，且只用自生成数据；<span class="p">核心</span> 把自我纠正从「无效」救回来，证明它需要专门训练、不是免费的。</span></p>
+</div>
+
+<h2>7. 弱到强（弱模型监督强模型）</h2>
+<p class="trend">当模型比人类（或比标注者）更强时，怎么用「弱监督」逼出「强能力」——这是 RSI 通往超人类的关键一环。</p>
+
+<div class="deep">
+<p class="paper"><b>Weak-to-Strong Generalization</b>（<a href="https://arxiv.org/abs/2312.09390">2312.09390</a>，Burns et al. 2023，OpenAI）<br>
+<code class="recipe">weak→strong -&gt; 逼出强能力 [弱监督者训练强模型]</code><br>
+<span class="idea"><span class="p">问题</span> 未来超人类模型靠什么监督，弱人类标签可能反而拖后腿；<span class="p">方法</span> 用弱模型（或弱人类）监督强模型，发现强模型能「超越」弱监督者学到更强的能力；<span class="p">核心</span> 提出「超对齐」的核心难题：弱到强能否泛化，为 RSI 的「自我监督超人类」定调。</span></p>
+</div>
+
+<h2>8. 现代 RSI / 自动化研究（2024-2026）</h2>
+<p class="trend">RSI 的最新形态是「自动化科研 + 无验证器自我进化」：AI Scientist 让模型自己写论文、AlphaEvolve 让模型进化整段代码库，G-Zero / Tool-R0 挑战 open-ended 领域的无验证器自我改进。这条线把「自我改进」从「调参数」升级成「改代码、发论文、自进化」。</p>
+
+<p class="paper"><b>The AI Scientist</b>（<a href="https://arxiv.org/abs/2408.06292">2408.06292</a>，Lu et al. 2024，Sakana）<br>
+<code class="recipe">self-train(科研闭环) -&gt; 自动发论文 [想法 → 代码 → 实验 → 论文 → 评审]</code><br>
+<span class="idea"><span class="p">问题</span> 科学发现能不能全自动；<span class="p">方法</span> 端到端管线：LLM 提想法、写代码、跑实验、写论文、自动评审，循环改进；<span class="p">核心</span> 把「自我改进」做成「自动科研」，是 RSI 在科学发现上的极致形态。</span></p>
+
+<div class="deep">
+<p class="paper"><b>AlphaEvolve</b>（<a href="https://arxiv.org/abs/2506.13131">2506.13131</a>，Novikov et al. 2025，DeepMind）<br>
+<code class="recipe">self-train(进化代码) -&gt; 科学/算法发现 [进化算法 + LLM 遗传算子]</code><br>
+<span class="idea"><span class="p">问题</span> 怎么让 LLM 自己进化代码库去解决开放科学问题、优化关键计算基础设施；<span class="p">方法</span> 进化算法把代码当「基因组」，用 LLM 当遗传算子（生成候选、变异、评估），多语言、能改整段代码库；<span class="p">核心</span> FunSearch 的全面升级，在真实科学/工程问题上大幅增强 SOTA LLM，是「自我改进代码」的工业级落地。</span></p>
+</div>
+
+<p class="paper"><b>G-Zero（Self-Play for Open-Ended Generation from Zero Data）</b>（<a href="https://arxiv.org/abs/2605.09959">2605.09959</a>，2026）<br>
+<code class="recipe">self-play(免验证器) -&gt; open-ended 自我进化 [Hint-δ 内在奖励 + 协同进化]</code><br>
+<span class="idea"><span class="p">问题</span> 自我进化在可验证领域强、在 open-ended 任务里卡在「代理裁判会偏、奖励黑客」；<span class="p">方法</span> 免验证器的协同进化框架，用 Hint-δ 内在奖励量化「提示带来的进步」；<span class="p">核心</span> 尝试解决 RSI 最大的病：没有外部验证器时怎么自我改进。</span></p>
+
+<p class="paper"><b>Tool-R0（Self-Evolving Tool-Learning from Zero Data）</b>（<a href="https://arxiv.org/abs/2602.21320">2602.21320</a>，2026）<br>
+<code class="recipe">self-play -&gt; 零数据学会用工具 [自生成课程 + 自博弈 RL]</code><br>
+<span class="idea"><span class="p">问题</span> 工具学习依赖人工构造的任务-解对，可扩展性差；<span class="p">方法</span> 自博弈 RL 从零数据学复杂工具调用，自生成课程能超过静态人类课程；<span class="p">核心</span> 证明「自博弈 RL 本身」足以教复杂工具调用能力，RSI 在 agent 工具上的应用。</span></p>
+
+<p class="paper"><b>Huxley-Gödel Machine</b>（<a href="https://arxiv.org/abs/2510.21614">2510.21614</a>，2025）<br>
+<code class="recipe">analysis -&gt; 指出自我修改的假象 [基准提升 ≠ 后续可改进]</code><br>
+<span class="idea"><span class="p">问题</span> 现有「自我改进 coding agent」长一棵自修改树、假设基准分越高就越能继续改，这个假设成立吗；<span class="p">方法</span> 分析发现「基准性能」和「后续自我修改的前景」不匹配，据此近似 Gödel Machine 的最优改进；<span class="p">核心</span> 给「自我改进代码」泼冷水 + 给一个更接近理论的框架，是 RSI 的清醒剂。</span></p>
+
+<h2>9. 共识与分歧（速记版）</h2>
+<p><b>共识：</b></p>
+<ol>
+<li>有外部验证器（代码、数学、游戏）时，自我改进最可靠——ReST/DNO/AlphaEvolve 都在这类任务上真涨点。</li>
+<li>没有验证器时，self-reward / self-play 能带来提升，但裁判会偏、会奖励黑客，是主要风险。</li>
+<li>自我纠正不是免费的：无外部反馈时基本无效（Cannot Self-Correct），需专门 RL 训练（SCoRe）才能变成真能力。</li>
+<li>「弱到强」是通往超人类自我改进的关键难题，弱监督者能逼出强能力但上限未知。</li>
+<li>现代 RSI 从「调参数」走向「改代码、自动科研」（AI Scientist / AlphaEvolve）。</li>
+</ol>
+<p><b>分歧 / 难点：</b></p>
+<ol>
+<li><b>监督信号可信度</b>：verifier → self-play → self-reward/proxy-judge 依次变不可靠，到底哪一层能支撑「真自我改进」没有共识。</li>
+<li><b>自纠正有效性</b>：免训练自纠正（Self-Refine）宣称有效 vs「不能自纠正」的实验结论，至今争论，SCoRe 只是部分和解。</li>
+<li><b>奖励黑客 vs 真改进</b>：proxy-judge 容易被钻空子，G-Zero 的 Hint-δ 等内在奖励是尝试，但尚无公认解法。</li>
+<li><b>RSI 会不会「转圈」</b>：没有外部信号时，模型可能在「自己的分布」里打转而非升级（Huxley-Gödel Machine 指出的假象）。</li>
+<li><b>安全与失控</b>：真正的递归自我改进一旦跑起来，人类如何监督超人类自我修改，仍是开放问题（Weak-to-Strong 只是第一步）。</li>
+</ol>
+
+<hr>
+<p class="note">说明：种子/综述（Schmidhuber survey 2607.13104）、点名类（Gödel Machine、AlphaZero、Self-Rewarding、SCoRe、Cannot Self-Correct、AlphaEvolve）已读摘要/方法；其余为标题 + 通识归纳，arXiv 号均逐一核对。RSI 与「推理/R1 式 RL」「agent 自我进化」相邻但不同，后者如需要可单独成篇。</p>
+
+</main>
+</body>
+</html>
