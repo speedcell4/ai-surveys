@@ -50,7 +50,7 @@ window.MathJax = {
 <li><b>2023-2024 SSM 线</b>：Mamba / Mamba-2 用「选择性状态转移」补表达力，xLSTM 用门控复活 LSTM，线性 RNN 跟线性注意力其实是同一族（Mamba-2 的 SSD 框架把 SSM 和注意力统一）。</li>
 <li><b>2024-2025 Delta 规则线（转折）</b>：DeltaNet 把 state 的更新从「叠加」改成「先删后写」的 delta 规则，精确 recall 大幅回升；Gated DeltaNet 再补一个门控快速遗忘。这是线性注意力「从快但记不住，到又快又记得住」的关键一步。</li>
 <li><b>2024-2025 Test-time learning</b>：TTT 把 hidden state 本身做成一个 ML 模型、用 self-supervised 一步更新；Titans 给注意力配一个「按惊讶度记忆」的神经长期记忆。线性注意力有了第三种「更会记」的 state。</li>
-<li><b>2025-2026 汇流成混合</b>：Qwen3-Next（Gated DeltaNet + Gated Attention 3:1）、Kimi K2/K3（KDA 线性 + 潜注意力）、MiniMax M2（Lightning 线性）都表明——<b>纯线性单独不够，把「便宜的线性压缩」和「贵但准的注意力检索」按层混合，才是旗舰的最优解</b>。线性层管长程、全注意力/稀疏层管精确召回。</li>
+<li><b>2025-2026 汇流成混合</b>：Qwen3-Next（Gated DeltaNet + Gated Attention 3:1）、Kimi K2/K3（KDA 线性 + 潜注意力）、Ling-3.0-flash（KDA + MLA 5:1）都表明——<b>纯线性单独不够，把「便宜的线性压缩」和「贵但准的注意力检索」按层混合，才是旗舰的最优解</b>。线性层管长程、全注意力/稀疏层管精确召回；此外低秩 KV（MLA / StepFun MFA）在同一效率谱系里进一步省内存。</li>
 </ol>
 <p>三条并行轴：<b>复杂度</b>（dense → linear/ssm → hybrid）、<b>state 更新规则</b>（叠加 → 门控 → delta → ttt/memory）、<b>精确 recall 能力</b>（越往后越接近 softmax）。稀疏注意力那条路单独成篇，见 <a href="sparse-attention.html">sparse-attention.html</a>。</p>
 
@@ -172,7 +172,7 @@ window.MathJax = {
 </div>
 
 <h2>7. 新一代旗舰（混合架构：线性压缩 + 注意力检索）</h2>
-<p class="trend">2025 之后的最大共识：别二选一，<b>混合</b>。线性/SSM 层便宜、管长程压缩；全注意力或稀疏层贵、管精确召回；按 3:1 之类比例交错。三个开放旗舰都这么干。</p>
+<p class="trend">2025 之后的最大共识：别二选一，<b>混合</b>。线性/SSM 层便宜、管长程压缩；全注意力或稀疏层贵、管精确召回；按 3:1 或 5:1 交错。Qwen3-Next、Kimi K2/K3、MiniMax M2、Ling-3.0-flash 等旗舰都这么干；此外「低秩 KV 压缩」（MLA / MFA）是注意力检索侧的省内存技巧，也一并收在这里。</p>
 
 <p class="paper"><b>Hymba（Hybrid-head Architecture）</b>（<a href="https://arxiv.org/abs/2411.13676">2411.13676</a>，NVIDIA 2024）<br>
 <code class="recipe">hybrid(attention head + SSM head) -&gt; 小模型效率 [并行双头 + meta token]</code><br>
@@ -195,8 +195,20 @@ window.MathJax = {
 </div>
 
 <p class="paper"><b>MiniMax M2 系列</b>（<a href="https://arxiv.org/abs/2605.26494">2605.26494</a>，MiniMax 2026）<br>
-<code class="recipe">MoE(线性注意力谱系) -&gt; agentic 前沿 [agent 数据 + Forge RL + 自进化]</code><br>
-<span class="idea"><span class="p">问题</span> 小激活（mini activation）能不能释放真实世界智能、并端到端服务 agentic 任务；<span class="p">方法</span> 229.9B 总参 / 9.8B 激活，三件套：agent 驱动的可验证轨迹数据、Forge 长程 RL 系统、M2.7 起步的自进化；<span class="p">核心</span> Lightning Attention 谱系（MiniMax 线性注意力）的旗舰，重点是 agentic RL 而非纯架构。</span></p>
+<code class="recipe">MoE(229.9B/9.8B) -&gt; agentic 前沿 [agent 数据 + Forge RL + 自进化]</code><br>
+<span class="idea"><span class="p">问题</span> 小激活（mini activation）能不能释放真实世界智能、并端到端服务 agentic 任务；<span class="p">方法</span> 229.9B 总参 / 9.8B 激活，三件套：agent 驱动的可验证轨迹数据、Forge 长程 RL 系统、M2.7 起步的自进化；<span class="p">核心</span> 报告重心在 MoE + agentic RL 与自进化，注意力架构未在摘要展开（MiniMax 的线性注意力底座是 Lightning Attention-2，见 §3）。</span></p>
+
+<p class="paper"><b>Ling-3.0-flash（Ant 百灵）</b>（<a href="https://developer.ant-ling.com/zh-CN/blogs/ling-3.0-flash-release">官方博客</a>，2026）<br>
+<code class="recipe">hybrid(KDA : MLA = 5:1) -&gt; 124B/5.1B + 256K→1M [细粒度对角门控 KDA + 1/64 MoE]</code><br>
+<span class="idea"><span class="p">问题</span> 如何在极低激活下对标上一代 1T 级旗舰；<span class="p">方法</span> 预训练起就用原生混合线性注意力，每 6 层 = 5 层 KDA + 1 层 MLA；KDA 用细粒度对角门控给不同通道独立的保留/衰减/写入控制，稀疏 MoE 每个 token 只激活 1/64 专家；<span class="p">核心</span> 124B 总参 / 5.1B 激活，原生 256K、可扩 1M，「KDA + MLA」混合线性注意力在蚂蚁系旗舰落地。</span></p>
+
+<p class="paper"><b>MFA（Multi-matrix Factorization Attention）</b>（<a href="https://arxiv.org/abs/2412.19255">2412.19255</a>，StepFun 2024）<br>
+<code class="recipe">low-rank(QK 多矩阵分解) -&gt; KV -56% vs MLA / -93.7% vs MHA [MFA-KR key 复用]</code><br>
+<span class="idea"><span class="p">问题</span> 严格 KV 预算下 MLA 等现有变体掉性能；<span class="p">方法</span> 在 QK 回路做低秩多矩阵分解，放大注意力头的数量与维度；MFA-KR 再把 key 缓存重参数化复用作 value；<span class="p">核心</span> 超 MLA、比肩 MHA，同时 KV 缓存分别省 56% / 93.7%，是 Step-3 的注意力内核（低秩 KV，非 $O(n)$ 线性）。</span></p>
+
+<p class="paper"><b>Step-3（Large yet Affordable）</b>（<a href="https://arxiv.org/abs/2507.19427">2507.19427</a>，StepFun 2025）<br>
+<code class="recipe">low-rank(MFA) + AFD -&gt; 低解码成本 [注意力/FFN 分离 + 38B 激活]</code><br>
+<span class="idea"><span class="p">问题</span> 大模型解码硬件效率低、长上下文推理成本高；<span class="p">方法</span> 用 MFA 低秩压缩 KV，并把注意力与 FFN 拆成两个专用子系统（AFD）做分布式推理；<span class="p">核心</span> 321B VLM、38B 激活，Hopper 上解码吞吐超 DeepSeek-V3，是低秩 KV + 系统协同设计的效率路线。</span></p>
 
 <h2>8. 训练数据与 Benchmark（单独一节）</h2>
 <p class="trend">子平方架构能不能训起来、训完到底「真长」还是「假长」，是另一条独立的线：用什么数据/优化器训（K2 的 MuonClip、M2 的 agent 数据），以及用什么 benchmark 照出 recall / 真实上下文长度。</p>
@@ -232,7 +244,7 @@ window.MathJax = {
 <ol>
 <li>softmax 注意力是「精确但 $O(n^2)$」，线性/SSM 是「便宜但定长 state 有 recall 上限」，两者不能互相替代。</li>
 <li>delta 规则 + 门控（Gated DeltaNet / KDA / Gated DeltaNet-2）是目前线性注意力「召回」最接近 softmax 的一支。</li>
-<li><b>混合是旗舰的答案</b>：Qwen3-Next、Kimi K2/K3、MiniMax M2 都按「线性层 + 注意力层」交错，线性管长程、注意力管精确召回。</li>
+<li><b>混合是旗舰的答案</b>：Qwen3-Next、Kimi K2/K3、Ling-3.0-flash 都按「线性层 + 注意力层」交错，线性管长程、注意力管精确召回。</li>
 <li>2025-2026 竞争重心从「纯架构」转向「数据 + RL + 扩展效率」（K2 的 MuonClip、M2 的 Forge、K3 的 2.5× 扩展效率）。</li>
 </ol>
 <p><b>分歧 / 难点：</b></p>
@@ -245,7 +257,7 @@ window.MathJax = {
 </ol>
 
 <hr>
-<p class="note">说明：种子与点名论文（Gated DeltaNet 2412.06464、Kimi K3 2607.24653、Qwen3-Next/Gated Attention 2505.06708、Titans 2501.00663、TTT 2407.04620、MiniMax M2 2605.26494）已读摘要/方法；所有 arXiv 号已逐一核对。稀疏注意力单独成篇：<a href="sparse-attention.html">sparse-attention.html</a>；长上下文整体脉络见 <a href="long-context.html">long-context.html</a>。「test-time training」在此按架构（TTT/Titans）并入；经典 continual learning 是另一主题。</p>
+<p class="note">说明：种子与点名论文（Gated DeltaNet 2412.06464、Kimi K3 2607.24653、Qwen3-Next/Gated Attention 2505.06708、Titans 2501.00663、TTT 2407.04620、MiniMax M2 2605.26494）已读摘要/方法；所有 arXiv 号已逐一核对。Ling-3.0-flash 信息来自官方博客；MFA / Step-3 属低秩 KV 压缩（$O(n^2)$ 注意力、非 $O(n)$ 线性），与 MLA 同族，放这里是因同属「注意力效率」谱系；MiniMax M2 报告摘要未展开注意力架构，已按此修订。稀疏注意力单独成篇：<a href="sparse-attention.html">sparse-attention.html</a>；长上下文整体脉络见 <a href="long-context.html">long-context.html</a>。「test-time training」在此按架构（TTT/Titans）并入；经典 continual learning 是另一主题。</p>
 
 </main>
 

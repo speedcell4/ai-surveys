@@ -49,6 +49,7 @@ window.MathJax = {
 <li><b>2023-2024 检索式（选得对）</b>：Landmark / MInference / MoBA 开始按「相关性」动态选块，把稀疏从「固定模式」变成「检索/路由」。</li>
 <li><b>2025 DeepSeek NSA → DSA（原生 + 粒度细化）</b>：NSA 把压缩、块选择、滑窗三路做成「硬件对齐、原生可训练」；DSA 把选择粒度从 block 细化到 token。</li>
 <li><b>2026 DeepSeek V4 CSA + HCA（压缩 + 混合）</b>：先在序列维度把 KV 压缩（4:1 的 CSA、128:1 的 HCA），再在压缩条目上做稀疏/密集注意力，把 1M token 的 KV 和 FLOPs 都砍到 V3.2 的约 1/10。</li>
+<li><b>2026 厂商落地（混合 SWA + DSA 系）</b>：GLM-5 直接采用 DSA、LongCat 优化 DSA 索引器、小米 MiMo 用 128-token SWA + 全局 5:1、StepFun 用 3:1 SWA/全注意力、Meta SP-KV 用学习式 KV 裁剪——学术稀疏开始进入开源/闭源旗舰的默认配置。</li>
 </ol>
 <p>两条并行轴：<b>选择粒度</b>（block → token）、<b>选择方式</b>（固定 → 路由 → 学习 → 压缩后选择）。交点是一个开放问题：<b>是先压缩再选（CSA/HCA），还是先选再算（DSA/Seer）？</b></p>
 
@@ -147,7 +148,38 @@ window.MathJax = {
 <code class="recipe">dense(分块环形) -&gt; 近无限上下文 [分布式分块注意力]</code><br>
 <span class="idea"><span class="p">问题</span> 长序列单卡放不下、注意力矩阵爆炸；<span class="p">方法</span> 序列分块、按环在设备间传递 KV，块间做注意力；<span class="p">核心</span> 分布式分块把 dense 扩到百万级（严格说不是稀疏，是分布式的块化 dense）。</span></p>
 
-<h2>7. 共识与分歧（速记版）</h2>
+<h2>7. 厂商落地（混合 SWA / DSA 系 + KV 缓存）</h2>
+<p class="trend">2026 年这条线从「学术方法」走向「厂商落地」：GLM-5 直接把 DSA 当默认注意力，LongCat 用流式/跨层/层级三个索引策略修 DSA 闪电索引器的工程瓶颈，小米 MiMo 走「128-token 滑窗 + 全局 5:1」、StepFun 走「3:1 滑窗/全注意力」，Meta 用「学习式 KV 裁剪」把缓存压 3-10x，HySparse 在 80B MoE 里只留 5/49 层 full、KV 近 10x。共同矛盾是：稀疏/混合确实省算力和 KV，但要追平 full attention 的召回，且索引器与缓存工程不能拖后腿。这些落地是 §2-§6 学术方法的「上线版」，也把「先选再算 vs 先压缩再选」「block vs token」的争论直接带进旗舰配置，汇成本文末尾的共识与分歧。</p>
+
+<p class="paper"><b>GLM-5（from Vibe Coding to Agentic Engineering）</b>（<a href="https://arxiv.org/abs/2602.15763">2602.15763</a>，Zhipu 2026）<br>
+<code class="recipe">sparse(DSA) -&gt; 省训练/推理 + 保长上下文 [DSA + 异步 RL]</code><br>
+<span class="idea"><span class="p">问题</span> 下一代基础模型的训练与推理成本高；<span class="p">方法</span> 采用 DSA 显著降低训练/推理成本、同时保持长上下文 fidelity，并配套解耦生成与训练的异步 RL 基础设施；<span class="p">核心</span> 开源旗舰把 DeepSeek DSA 当默认注意力落地，说明 DSA 正从单一模型走向厂商通用底座。</span></p>
+
+<p class="paper"><b>LongCat Sparse Attention（LSA）</b>（<a href="https://arxiv.org/abs/2608.01662">2608.01662</a>，Meituan 2026）<br>
+<code class="recipe">sparse(DSA + 三层索引优化) -&gt; 1M 原生训练 [流式 / 跨层 / 层级索引]</code><br>
+<span class="idea"><span class="p">问题</span> DSA 闪电索引器有 $O(L^2)$ 打分开销、输出访存不连续；<span class="p">方法</span> 三个正交策略：流式感知索引把散落 KV 转成连续布局、跨层索引复用单层结果并配蒸馏、层级索引粗到细收缩候选集；<span class="p">核心</span> 69B-A3B 到 560B-A27B 都追上 full attention，支撑 LongCat-2.0（1.6T-A48B）并原生训到 1M token。</span></p>
+
+<p class="paper"><b>LongCat ZigZag Attention（LoZA）</b>（<a href="https://arxiv.org/abs/2512.23966">2512.23966</a>，Meituan 2025）<br>
+<code class="recipe">sparse(ZigZag) -&gt; 现成 full-attn 模型转稀疏 + 1M [轻量续训]</code><br>
+<span class="idea"><span class="p">问题</span> 已有 full-attention 模型要长上下文，但重训成本高；<span class="p">方法</span> ZigZag 稀疏注意力用有限算力把任意 full-attention 模型转成稀疏版本；<span class="p">核心</span> 中途续训 LongCat-Flash 得到 LongCat-Flash-Exp，可处理到 1M token。</span></p>
+
+<p class="paper"><b>MiMo-V2-Flash</b>（<a href="https://arxiv.org/abs/2601.02780">2601.02780</a>，Xiaomi 2026）<br>
+<code class="recipe">hybrid(SWA 128 : global = 5:1) -&gt; 309B/15B agentic [SWA+全局交错 + MTP]</code><br>
+<span class="idea"><span class="p">问题</span> 快速推理与 agentic 能力怎么同时要；<span class="p">方法</span> 128-token 滑窗注意力与全局注意力 5:1 交错，27T token + Multi-Token Prediction，原生 32K 再扩到 256K；<span class="p">核心</span> 小米旗舰：滑窗管局部、全局管召回，5:1 是不同于 Qwen/Kimi 3:1 的另一种配比。</span></p>
+
+<p class="paper"><b>HySparse（Hybrid Sparse Attention）</b>（<a href="https://arxiv.org/abs/2602.03560">2602.03560</a>，Xiaomi 2026）<br>
+<code class="recipe">sparse(full-oracle + KV 复用) -&gt; 近 10x KV 降 [full 层选 token，sparse 层复用 KV]</code><br>
+<span class="idea"><span class="p">问题</span> 稀疏层选 token 要额外 proxy，且往往只省算力不省 KV；<span class="p">方法</span> 用 full attention 层当 oracle 选重要 token，稀疏层直接复用 full 层的 token 选择与 KV 缓存；<span class="p">核心</span> 80B MoE 49 层只留 5 层 full，仍超 full attention 与 SWA 基线，同时省计算和内存。</span></p>
+
+<p class="paper"><b>Step 3.5 Flash</b>（<a href="https://arxiv.org/abs/2602.10604">2602.10604</a>，StepFun 2026）<br>
+<code class="recipe">hybrid(SWA : full = 3:1) -&gt; 196B/11B 前沿 agentic [SWA/full 交错 + MTP-3]</code><br>
+<span class="idea"><span class="p">问题</span> 前沿 agentic 智能与推理效率难兼得；<span class="p">方法</span> 196B 总参 / 11B 激活的稀疏 MoE，3:1 滑窗/全注意力交错，配 MTP-3 降多轮交互延迟；<span class="p">核心</span> 与 Qwen3-Next、Kimi 同款 3:1 混合配方，落到 StepFun 的开源前沿小激活模型。</span></p>
+
+<p class="paper"><b>SP-KV（Self-Pruned Key-Value Attention）</b>（<a href="https://arxiv.org/abs/2605.14037">2605.14037</a>，Meta FAIR 2026）<br>
+<code class="recipe">evict(learned utility) -&gt; KV 3-10x 压缩 [预测未来效用 + 局部窗口]</code><br>
+<span class="idea"><span class="p">问题</span> 测试时 compute / agent 时代序列更长，KV 缓存是瓶颈；<span class="p">方法</span> 轻量效用预测器给每个 KV 打分，近 token 永远保留，旧 token 只有预测效用过阈值才写进缓存并参与全局注意力，与 LLM 端到端 next-token 联合训练；<span class="p">核心</span> 动态稀疏化（不固定压缩比），并揭示分层/分头稀疏模式可指导混合局部-全局架构设计。</span></p>
+
+<h2>8. 共识与分歧（速记版）</h2>
 <p><b>共识：</b></p>
 <ol>
 <li>稀疏注意力保留「精确注意力」，只是挑着算，比线性压缩更接近 softmax 的召回质量。</li>
@@ -164,7 +196,7 @@ window.MathJax = {
 </ol>
 
 <hr>
-<p class="note">说明：DeepSeek 谱系（NSA 2502.11089、DSA/V3.2 2512.02556、CSA+HCA/V4 2606.19348）已读原文/技术报告；其余论文摘要/标题经核实，arXiv 号均逐一核对。早期稀疏（Sparse Transformer 等）与 hardware 视角（FlashAttention/PagedAttention）的更完整展开见 <a href="long-context.html">long-context.html</a>；线性注意力那条路见 <a href="linear-attention.html">linear-attention.html</a>。</p>
+<p class="note">说明：DeepSeek 谱系（NSA 2502.11089、DSA/V3.2 2512.02556、CSA+HCA/V4 2606.19348）已读原文/技术报告；其余论文摘要/标题经核实，arXiv 号均逐一核对。新增厂商落地（GLM-5 / LongCat LSA+LoZA / MiMo / HySparse / Step-3.5 Flash / Meta SP-KV）均已读摘要核实；Google Gemini、OpenAI、Anthropic、xAI 等闭源旗舰的注意力配方公开信息不足，未臆测收录。早期稀疏（Sparse Transformer 等）与 hardware 视角（FlashAttention/PagedAttention）的更完整展开见 <a href="long-context.html">long-context.html</a>；线性注意力那条路见 <a href="linear-attention.html">linear-attention.html</a>。</p>
 
 </main>
 
