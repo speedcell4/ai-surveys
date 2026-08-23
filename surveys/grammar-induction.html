@@ -93,13 +93,17 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <h3>2.0 源头（2002-2009，奠定问题与 baseline）</h3>
 <p class="trend">在 2010 年之前，这个问题已经被定义清楚：从裸文本学出成分树或依存树。经典 PCFG/DMV 用 EM 变体估计，但都困在「局部最优 + 无标注」里。这一时期的几个思想——上下文特征（CCM）、贝叶斯正则（Johnson）、对比估计（Smith &amp; Eisner）、在线 EM（Liang &amp; Klein）——后来几乎全部被神经一代继承。</p>
 
+<div class="deep">
 <p class="paper"><b>CCM：A Constituent-Context Model（Klein &amp; Manning 2002）</b>（<a href="https://aclanthology.org/P02-1017/">ACL 2002</a>）<br>
 <code class="recipe">pcfg(sentence) -&gt; 成分树 + MLE（EM + split/merge）</code><br>
 <span class="idea"><span class="p">问题</span> 朴素 PCFG 的 EM 学出的规则太「平均」、树质量差；<span class="p">方法</span> 给每个成分加「上下文」特征，再用 split/merge 自动扩展文法；<span class="p">核心</span> 上下文特征 + 文法分裂合并，是无监督成分解析早期最强 baseline。</span></p>
+</div>
 
+<div class="deep">
 <p class="paper"><b>DMV（Klein &amp; Manning 2004）</b>（<a href="https://aclanthology.org/P04-1061/">ACL 2004</a>）<br>
 <code class="recipe">dmv(pos-seq) -&gt; 依存树 + MLE（EM）</code><br>
 <span class="idea"><span class="p">问题</span> 没有标注树怎么学依存；<span class="p">方法</span> head-outward 生成模型：每个词先选中心词、再向左右生成依存词，配价限制数量；<span class="p">核心</span> 「依存 + 配价」模型成为之后十几年无监督依存解析的 baseline。</span></p>
+</div>
 
 <p class="paper"><b>Variational Bayesian Grammar Induction（Kurihara &amp; Sato 2006）</b>（ICGI 2006）<br>
 <code class="recipe">pcfg(sentence) -&gt; 文法 + ELBO（变分贝叶斯）</code><br>
@@ -215,25 +219,33 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <code class="recipe">gumbel-tree-lstm(sentence) -&gt; 树 + 任务损失（Gumbel-Softmax）</code><br>
 <span class="idea"><span class="p">问题</span> 树组合操作不可微；<span class="p">方法</span> 用 Gumbel-Softmax 采样离散组合、走 straight-through 梯度；<span class="p">核心</span> 可微的离散树，端到端学任务专属结构。</span></p>
 
+<div class="deep">
 <p class="paper"><b>Compound PCFG（Kim et al. 2019）</b>（<a href="https://arxiv.org/abs/1906.10225">1906.10225</a>）<br>
 <code class="recipe">neural-pcfg(sentence) -&gt; 成分树 + MLE（compound 分布）</code><br>
 <span class="idea"><span class="p">问题</span> 普通神经 PCFG 的规则概率被句子级向量 z 约束、表达力弱；<span class="p">方法</span> compound 分布让规则概率随连续 z 采样变化；<span class="p">核心</span> 连续潜变量 + 神经参数化 = 无监督成分解析 SOTA。</span></p>
+</div>
 
+<div class="deep">
 <p class="paper"><b>Neural PCFG（Kim et al. 2019）</b>（<a href="https://aclanthology.org/P19-1228/">ACL 2019</a>）<br>
 <code class="recipe">neural-pcfg(sentence) -&gt; 成分树 + MLE（inside-outside）</code><br>
 <span class="idea"><span class="p">问题</span> 让神经网络直接生成 PCFG 规则；<span class="p">方法</span> 神经网络给规则打分、inside-outside 求 MLE；<span class="p">核心</span> 神经 PCFG 基线（compound 的简化版）。</span></p>
+</div>
 
+<div class="deep">
 <p class="paper"><b>DIORA（Drozdov et al. 2019）</b>（<a href="https://arxiv.org/abs/1904.02142">1904.02142</a>）<br>
 <code class="recipe">diora(sentence) -&gt; 成分树 + inside-outside 重建</code><br>
 <span class="idea"><span class="p">问题</span> 想同时学树和成分表征、且保证内外一致；<span class="p">方法</span> inside-outside 递归自编码器，用 outside 表征重建每个叶子词；<span class="p">核心</span> 重建目标诱导隐树，F1 大幅提升。</span></p>
+</div>
 
 <p class="paper"><b>URNNG（Kim et al. 2019）</b>（<a href="https://aclanthology.org/N19-1016/">NAACL 2019</a>）<br>
 <code class="recipe">neural-rnng(sentence) -&gt; 成分树 + ELBO（无监督）</code><br>
 <span class="idea"><span class="p">问题</span> 想无监督学「显式树」的神经文法；<span class="p">方法</span> 无监督训练递归神经文法 RNNG、用变分下界；<span class="p">核心</span> 无监督显式树结构神经文法。</span></p>
 
+<div class="deep">
 <p class="paper"><b>Ordered Neurons / ON-LSTM（Shen et al. 2019）</b>（<a href="https://arxiv.org/abs/1810.09536">1810.09536</a>）<br>
 <code class="recipe">rnn(sentence) -&gt; 树结构 + next-token（master 门控）</code><br>
 <span class="idea"><span class="p">问题</span> 怎么把树结构隐式塞进扁平 RNN；<span class="p">方法</span> 神经元排序、master 输入/遗忘门保证「更新顺序=树」、用 cumax；<span class="p">核心</span> cumax 门控让 LSTM 隐式编码语法树。</span></p>
+</div>
 
 <p class="paper"><b>Imitation Learning for Unsupervised Parsing（Li et al. 2019）</b>（<a href="https://aclanthology.org/P19-1338/">ACL 2019</a>）<br>
 <code class="recipe">tree-lstm(sentence) -&gt; 树动作 + 模仿学习（学 PRPN）</code><br>
@@ -295,13 +307,17 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <code class="recipe">nn(sentence) -&gt; 树结构 + 表示分析（自监督）</code><br>
 <span class="idea"><span class="p">问题</span> 自监督训练的神经网络是否真的学到层级句法；<span class="p">方法</span> 分析内部表示、发现句法树结构自然涌现；<span class="p">核心</span> 自监督（next-token/掩码）本身就能催生句法结构。</span></p>
 
+<div class="deep">
 <p class="paper"><b>R2D2: Recursive Transformer based on Differentiable Tree（Hu et al. 2021）</b>（<a href="https://arxiv.org/abs/2107.00967">2107.00967</a>，ACL 2021）<br>
 <code class="recipe">recursive-transformer(sentence) -&gt; 成分树 + next-token（可微 CKY）</code><br>
 <span class="idea"><span class="p">问题</span> 想用 transformer 做层级语言建模、同时诱导出可解释的树；<span class="p">方法</span> 用可微 CKY 树把底层 transformer 编码的 span 自底向上递归组合、next-token 训练；<span class="p">核心</span> 可微树 + 递归 transformer = 层级 LM 同时诱导成分树。</span></p>
+</div>
 
+<div class="deep">
 <p class="paper"><b>Fast-R2D2: Pretrained Recursive NN based on Pruned CKY（Hu, Mi, Li &amp; de Melo 2022）</b>（<a href="https://arxiv.org/abs/2203.00281">2203.00281</a>，EMNLP 2022）<br>
 <code class="recipe">recursive-transformer(sentence) -&gt; 成分树 + next-token（剪枝 CKY，top-down 并行）</code><br>
 <span class="idea"><span class="p">问题</span> R2D2 的稠密 CKY 推理慢、内存高、没法规模化；<span class="p">方法</span> 用一个轻量 top-down parser 做剪枝、只保留少量候选树，再并行递归编码；<span class="p">核心</span> 剪枝 CKY 让 R2D2 快 30-50 倍，语法诱导和文本表征都更好。</span></p>
+</div>
 
 <p class="paper"><b>Assessing the Ability of LSTMs to Learn Syntax-Sensitive Dependencies（Linzen, Dupoux &amp; Goldberg 2016）</b>（<a href="https://arxiv.org/abs/1611.01368">1611.01368</a>，TACL 2016）<br>
 <code class="recipe">lstm(sentence) -&gt; 语法一致性 + next-token（数一致探测）</code><br>
@@ -382,9 +398,11 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <code class="recipe">transformer(sentence) -&gt; 语法泛化 + next-token（合成 PCFG 数据）</code><br>
 <span class="idea"><span class="p">问题</span> transformer 何时、为何能层级泛化；<span class="p">方法</span> 在 PCFG 合成数据上系统控制变量（深度/宽度/位置编码）；<span class="p">核心</span> 层级泛化来自 next-token 预训练，不需要显式树偏置。</span></p>
 
+<div class="deep">
 <p class="paper"><b>Towards a Theory of Structure Acquisition（Cagnetta et al. 2024）</b>（<a href="https://arxiv.org/abs/2406.00048">2406.00048</a>）<br>
 <code class="recipe">dnn(sentence) -&gt; 文法 + next-token（理论分析）</code><br>
 <span class="idea"><span class="p">问题</span> DNN 学语法的理论机制是什么；<span class="p">方法</span> 在 PCFG 生成数据上给出 next-token 预测→学出语法的理论刻画；<span class="p">核心</span> 给「结构如何在 DNN 中习得」提供理论。</span></p>
+</div>
 
 <p class="paper"><b>On Eliciting Syntax from LMs via Hashing（Wang &amp; Utiyama 2024）</b>（<a href="https://arxiv.org/abs/2410.04074">2410.04074</a>，EMNLP 2024）<br>
 <code class="recipe">llm(sentence) -&gt; 成分树 + 对比 hashing（CKY）</code><br>

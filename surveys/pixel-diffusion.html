@@ -98,17 +98,23 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <h3>2.1 历史铺垫（窗口前，必要背景）</h3>
 <p class="trend">扩散最早直接在像素上「逐步加噪再学去噪」，但每步跑全分辨率太贵，于是转向 VAE 潜空间（LDM / Stable Diffusion）成为主流——代价是有损压缩、非端到端，给后来「回归像素」埋下伏笔。与此同时，score matching（SDE）→ flow matching → rectified flow → stochastic interpolants → SiT 这一支「把生成当速度场」的理论在 2022-2024 年成熟，是下面所有 `flow(...)` 记号的底座。</p>
 
+<div class="deep">
 <p class="paper"><b>DDPM</b>（<a href="https://arxiv.org/abs/2006.11239">2006.11239</a>）<br>
 <code class="recipe">diffuse(patch + noise) -&gt; ε-pred + ε-loss</code><br>
 <span class="idea"><span class="p">问题</span> GAN 训练不稳、易模式崩塌；<span class="p">方法</span> 把生成改成「逐步加噪→逐步去噪」，网络直接预测噪声；<span class="p">核心</span> 把难的「一步生成」拆成很多步简单的「去噪」。</span></p>
+</div>
 
+<div class="deep">
 <p class="paper"><b>LDM / Stable Diffusion</b>（<a href="https://arxiv.org/abs/2112.10752">2112.10752</a>）<br>
 <code class="recipe">diffuse(vae(patch) + noise) -&gt; ε-pred + ε-loss</code><br>
 <span class="idea"><span class="p">问题</span> 像素空间去噪每步都跑全分辨率、太贵；<span class="p">方法</span> 先用 VAE 压到潜空间再扩散；<span class="p">核心</span> VAE 有损、且「重建」与「生成」目标错位——正是后来「回归像素」要解决的痛点。</span></p>
+</div>
 
+<div class="deep">
 <p class="paper"><b>DiT</b>（<a href="https://arxiv.org/abs/2212.09748">2212.09748</a>）<br>
 <code class="recipe">diffuse(vae(patch) + noise) -&gt; ε-pred + ε-loss（U-Net → ViT）</code><br>
 <span class="idea"><span class="p">问题</span> U-Net 难随参数规模扩展；<span class="p">方法</span> 用 ViT 替换 U-Net 做扩散骨干；<span class="p">核心</span> 这是后来所有 pDiT 的架构底座。</span></p>
+</div>
 
 <p class="paper"><b>U-ViT</b>（<a href="https://arxiv.org/abs/2209.12152">2209.12152</a>）<br>
 <code class="recipe">diffuse(vae(patch) + noise) -&gt; ε-pred + ε-loss（ViT + 长跳跃连接）</code><br>
@@ -138,13 +144,17 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <code class="recipe">diffuse(A + noise) -&gt; score-pred + score-loss（SDE 统一）</code><br>
 <span class="idea"><span class="p">问题</span> 扩散与 score matching 各自为战；<span class="p">方法</span> 用随机微分方程（SDE）统一 DDPM 与 score matching；<span class="p">核心</span> score-based 生成的理论统一，是 `diffuse(...)` 记号的源头。</span></p>
 
+<div class="deep">
 <p class="paper"><b>Flow Matching</b>（<a href="https://arxiv.org/abs/2210.02747">2210.02747</a>）<br>
 <code class="recipe">flow(A + noise) -&gt; v-pred + flow-loss（条件概率路径）</code><br>
 <span class="idea"><span class="p">问题</span> 连续流训练难、扩散要复杂调度；<span class="p">方法</span> 在噪声-数据点对间定义简单条件概率路径、直接回归速度场 v；<span class="p">核心</span> 把生成变成「学速度场」，是本综述所有 `flow(...)` 记号的范式源头。</span></p>
+</div>
 
+<div class="deep">
 <p class="paper"><b>Rectified Flow</b>（<a href="https://arxiv.org/abs/2209.03003">2209.03003</a>）<br>
 <code class="recipe">flow(A + noise) -&gt; v-pred + rectified flow-loss（直线路径 + reflow）</code><br>
 <span class="idea"><span class="p">问题</span> 流路径弯曲、采样步数多；<span class="p">方法</span> 用直线路径连接噪声与数据、反复「拉直」（reflow）；<span class="p">核心</span> 直线流让采样更少步、更稳。</span></p>
+</div>
 
 <p class="paper"><b>Stochastic Interpolants</b>（<a href="https://arxiv.org/abs/2303.08797">2303.08797</a>）<br>
 <code class="recipe">flow(A + noise) -&gt; v-pred + interpolant-loss（统一 SDE/ODE）</code><br>
@@ -184,17 +194,23 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <h3>2.3 奠基催化（2025-10 ~ 2026-01）</h3>
 <p class="trend">2025 末到 2026 初的三个开关一起引爆了热潮：JiT 用 x-prediction 拆掉「必须预测噪声/速度」，MeanFlow 拆掉「必须多步」，EPG 拆掉「必须有 VAE」。</p>
 
+<div class="deep">
 <p class="paper"><b>MeanFlow</b>（<a href="https://arxiv.org/abs/2505.13447">2505.13447</a>）<br>
 <code class="recipe">meanflow(patch + noise) -&gt; v-pred + v-loss（一步）</code><br>
 <span class="idea"><span class="p">问题</span> 多步采样慢；<span class="p">方法</span> 用「平均速度场」把多步压成一步；<span class="p">核心</span> 一步生成建模框架。</span></p>
+</div>
 
+<div class="deep">
 <p class="paper"><b>JiT（Back to Basics）</b>（<a href="https://arxiv.org/abs/2511.13720">2511.13720</a>）<br>
 <code class="recipe">flow(patch + noise) -&gt; x-pred + v-loss</code><br>
 <span class="idea"><span class="p">问题</span> 高维像素空间预测噪声/速度会崩；<span class="p">方法</span> 让网络直接预测干净图 x（x-pred），损失用 v-loss（把 x̂ 换算成 v̂=(x̂−z_t)/(1−t) 再回归）；<span class="p">核心</span> 干净图在低维流形、噪声图在高维全空间，所以 x-pred 让普通 ViT + 大 patch 训得动——整波的关键开关。</span></p>
+</div>
 
+<div class="deep">
 <p class="paper"><b>EPG（There is No VAE）</b>（<a href="https://arxiv.org/abs/2510.12586">2510.12586</a>）<br>
 <code class="recipe">flow(patch + noise) -&gt; x-pred + consistency-loss（自监督预训练）</code><br>
 <span class="idea"><span class="p">问题</span> 没 VAE 就学不出好表示；<span class="p">方法</span> 先自监督预训练学语义，再端到端训一致性模型；<span class="p">核心</span> 用 SSL 的「两阶段」替代 VAE 的「压缩」。</span></p>
+</div>
 
 <p class="paper"><b>pMF（Pixel Mean Flow）</b>（<a href="https://arxiv.org/abs/2601.22158">2601.22158</a>）<br>
 <code class="recipe">meanflow(patch + noise) -&gt; x-pred + v-loss（+ 感知损失）</code><br>
@@ -289,9 +305,11 @@ body.lv1 .note, body.lv2 .note { display:none; }
 <code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（冻结自引导）</code><br>
 <span class="idea"><span class="p">问题</span> 提升质量通常要重训；<span class="p">方法</span> 冻结模型用自己生成的样本自引导；<span class="p">核心</span> 无需重新训练。</span></p>
 
+<div class="deep">
 <p class="paper"><b>Abra（Scaling Diffusion Image Training）</b>（<a href="https://arxiv.org/abs/2608.17286">2608.17286</a>）<br>
 <code class="recipe">flow(...) -&gt; v-pred + v-loss（缩放律）</code><br>
 <span class="idea"><span class="p">问题</span> 视觉生成缺 compute-optimal scaling law；<span class="p">方法</span> 跨三个数量级算力拟合缩放律；<span class="p">核心</span> ~200 image tokens/参数（Chinchilla 10 倍），应多喂数据少堆模型。</span></p>
+</div>
 
 <p class="paper"><b>REPA（Representation Alignment for Generation）</b>（<a href="https://arxiv.org/abs/2410.06940">2410.06940</a>）<br>
 <code class="recipe">flow(A + noise) -&gt; v-pred + 表示对齐 loss（对齐 DINO 表示）</code><br>
