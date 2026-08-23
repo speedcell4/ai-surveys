@@ -5,4 +5,6 @@
 - [Pixel Diffusion 速览](pixel-diffusion.html) — 像素空间扩散 / flow，2025-08 ~ 2026-08，84 篇
 - [Grammar Induction / Unsupervised Parsing 速览](grammar-induction.html) — 无监督句法分析，2010 ~ 2026，81 篇
 
+> 新增论文/续写速览前，先读 [AGENTS.md](AGENTS.md)，里面是这套「配方 + 一句话」格式的完整规范。
+
 在线预览见 GitHub Pages：<https://speedcell4.github.io/ai-surveys/>
