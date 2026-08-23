@@ -89,7 +89,7 @@ li { margin:.35em 0; }
 <span class="idea"><span class="p">问题</span> Qwen3-Next 这类「Gated Attention + Gated DeltaNet」混合到底有没有形式上的优势；<span class="p">方法</span> 在常精度假设下证明混合解码器在 parity 等任务上 scratchpad 更短；<span class="p">核心</span> 首次给出「混合线性+注意力」优于纯递归/纯注意力的理论证据。</span></p>
 
 <h2>3. 线性注意力（kernel 线：把历史压进定长矩阵 state）</h2>
-<p class="trend">最早的「逃 O(n²)」路线：把 softmax 里的指数核换成可分解的核函数 φ(q)·φ(k)，于是注意力可写成 S ← S + k·vᵀ 的递归。核心矛盾一直是「state 太小记不住」。这节是这条线怎么一步步修 recall。</p>
+<p class="trend">最早的「逃 O(n²)」路线：把 softmax 里的指数核换成可分解的核函数 φ(q)·φ(k)，于是注意力可写成 S ← S + k·vᵀ 的递归，训练 O(n)、解码 O(1) 内存。演进是：Linear Attention 立范式 → Performer 用随机特征近似 softmax → RetNet 加衰减 → GLA 把衰减变成数据依赖 → Lightning Attention-2 用分块打掉 cumsum 瓶颈 → Based 讲清「state 尺寸 vs 召回」的权衡。核心矛盾一直是「state 太小记不住」，这节就是这条线怎么一步步修 recall。</p>
 
 <p class="paper"><b>Linear Attention（Transformers are RNNs）</b>（<a href="https://arxiv.org/abs/2006.16236">2006.16236</a>，Katharopoulos et al. 2020）<br>
 <code class="recipe">linear(kernel) -&gt; O(n) 训练 + O(1) 推理内存 [S = S + k·vᵀ]</code><br>
@@ -116,7 +116,7 @@ li { margin:.35em 0; }
 <span class="idea"><span class="p">问题</span> 线性模型的 state 大小和 recall 能力到底是什么关系；<span class="p">方法</span> 用 Taylor 特征近似 softmax + 滑窗注意力，理论+实验刻画「state 尺寸 vs 召回」的权衡；<span class="p">核心</span> 说清了一个根本约束：定长 state 必然有 recall 上限。</span></p>
 
 <h2>4. SSM / 线性 RNN（Mamba 线：选择性转移）</h2>
-<p class="trend">不搞核函数，而是把序列建模直接写成状态空间 / 门控 RNN。核心是「让转移参数依赖输入」（Mamba），以及「证明 SSM 和注意力本质是一家」（Mamba-2 的 SSD）。</p>
+<p class="trend">不搞核函数，而是把序列建模直接写成状态空间 / 门控 RNN。三条支线：Mamba 让转移参数依赖输入（选择性 SSM）、Mamba-2 用 SSD 证明「SSM 和注意力本质是一家」、xLSTM 用指数门控 + 矩阵记忆把 LSTM 复活到 LLM 规模；RWKV 则独立走出 RNN 递推的线性路线。核心是「线性复杂度 + 内容感知」能不能追上注意力。</p>
 
 <p class="paper"><b>Mamba（Selective SSM）</b>（<a href="https://arxiv.org/abs/2312.00752">2312.00752</a>，Gu &amp; Dao 2023）<br>
 <code class="recipe">ssm(selective) -&gt; O(n) [输入依赖的状态转移]</code><br>

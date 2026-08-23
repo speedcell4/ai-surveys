@@ -66,6 +66,8 @@ li { margin:.35em 0; }
 
 <h2>2. Attention Sink 专章（核心叙事）</h2>
 
+<p class="trend">长上下文研究的第一章其实是「发现并解决一个 bug」。2023 年 StreamingLLM 发现 attention sink——softmax 让最初几个 token 吸收大量注意力，只保留滑窗会崩；H2O 则发现注意力分数是重尾的、少数 heavy-hitter 贡献大部分注意力。两个发现把「sink 必须处理」立成共识，此后的工作要么绕开它、要么解决它。本节把 sink 讲清楚：它是什么、怎么被发现，又怎么在 2025 年被 GPT-OSS（内置可训练 sink 参数）和 Gated Attention（门控直接消除 sink）两个方向分别「收编」。</p>
+
 <div class="deep">
 <p class="paper"><b>StreamingLLM：Efficient Streaming Language Models with Attention Sinks</b>（<a href="https://arxiv.org/abs/2309.17453">2309.17453</a>，ICLR 2024）<br>
 <code class="recipe">StreamingLLM: dense -&gt; 无限流式 [sink + 滑动窗口]</code><br>
@@ -90,9 +92,9 @@ li { margin:.35em 0; }
 <span class="idea"><span class="p">问题</span> sink 与 massive activation 一起损害训练稳定性和长上下文外推；<span class="p">方法</span> 在 SDPA 之后加 head 级 sigmoid 门控，引入非线性 + 稀疏性，直接消除 attention sink；<span class="p">核心</span> 「sink-free」：不用再特殊照顾 sink，还顺带提升长上下文外推，Qwen3-Next 已采用。</span></p>
 </div>
 
-<p class="trend">sink 被 GPT-OSS 和 Gated Attention 两个方向分别「解决」之后，长上下文研究的主战场转向了<b>稀疏注意力架构</b>：不再纠结 sink，而是把稀疏性做成原生、端到端可训练、硬件对齐，去冲 64K → 1M → 16M 上下文。下面这章就是「之后的新变化」。</p>
-
 <h2>3. 稀疏注意力（2024-2026，sink 之后的主战场）</h2>
+
+<p class="trend">sink 不再卡脖子之后，主战场转向<b>原生稀疏注意力</b>：不再纠结 sink，而是把稀疏性做成端到端可训练、硬件对齐，去冲 64K → 1M → 16M 上下文。核心矛盾是「怎么选才又准、又便宜、又可训练」——早期靠手工规则（Landmark、MInference），后来靠 MoE 式 block 路由（MoBA）、学出来的阈值（SeerAttention）、可切换的 dense↔sparse（InfLLM-v2），直到层级 landmark + 端到端检索分数（HiLS）。这条线与 <a href="linear-sparse-attention.html">linear-sparse-attention.html</a> 的稀疏章呼应。</p>
 
 <p class="paper"><b>Landmark Attention（Random-Access Infinite Context）</b>（<a href="https://arxiv.org/abs/2305.16300">2305.16300</a>，NeurIPS 2023）<br>
 <code class="recipe">Landmark: sparse(landmark) -&gt; 无限上下文 [检索式随机访问]</code><br>
@@ -141,7 +143,7 @@ li { margin:.35em 0; }
 <span class="idea"><span class="p">问题</span> 稀疏注意力在真实长文本上仍不稳；<span class="p">方法</span> 层次化块稀疏 + 局部窗口，训练与推理都稀疏；<span class="p">核心</span> 工业级稀疏注意力的落地。</span></p>
 
 <h2>4. KV 驱逐 / 压缩（H2O 之后的演进）</h2>
-<p class="trend">H2O 开了「驱逐不重要的 KV」这条路，后面主要是把「什么重要」判定得更准、更层自适应、更低开销。</p>
+<p class="trend">H2O 开了「驱逐不重要的 KV」这条路，后面主要争三件事：重要性判得准不准、预算按层怎么分、判断开销多低。代表分别是观察窗口投票（SnapKV）、浅层多留深层少留的金字塔预算（PyramidKV）、只用 query 做近零开销估计（Quest）。核心矛盾是「越省越不准」，所以这条免训路线长期活在推理加速里，而不是训练侧。</p>
 
 <p class="paper"><b>SnapKV</b>（<a href="https://arxiv.org/abs/2404.14469">2404.14469</a>）<br>
 <code class="recipe">SnapKV: evict -&gt; KV 压缩 [观察窗口投票选重要 KV]</code><br>
@@ -156,7 +158,7 @@ li { margin:.35em 0; }
 <span class="idea"><span class="p">问题</span> 现有驱逐要算满注意力分数、开销高；<span class="p">方法</span> 只用量化后的 query 做重要性估计，绕过完整注意力；<span class="p">核心</span> 近零开销的 KV 驱逐。</span></p>
 
 <h2>5. 位置编码 / 长度外推</h2>
-<p class="trend">另一条路不动注意力、只改位置编码，让训练时 4K 的模型直接外推到 128K/1M。</p>
+<p class="trend">另一条路不动注意力、只改位置编码，让训练时 4K 的模型直接外推到 128K/1M。演进是：RoPE 立起旋转位置的标准 → YaRN 用 NTK 频率缩放 + 温度修正让外推不崩 → LongRoPE 用进化搜索非均匀缩放冲到 2048K → HoPE 去掉低频分量、从理论打破长期衰减。核心矛盾是「外推得越远、短上下文精度越受损」。</p>
 
 <p class="paper"><b>RoPE（Rotary Position Embedding）</b>（<a href="https://arxiv.org/abs/2104.09864">2104.09864</a>）<br>
 <code class="recipe">RoPE: 旋转位置编码 -&gt; 相对位置 [复数旋转]</code><br>
@@ -179,7 +181,7 @@ li { margin:.35em 0; }
 <span class="idea"><span class="p">问题</span> RoPE 的长期衰减让远处 token 交互变弱；<span class="p">方法</span> 只保留 RoPE 的高频分量、去掉低频，从理论上打破长期衰减；<span class="p">核心</span> 位置编码与「长期衰减」解耦。</span></p>
 
 <h2>6. 线性注意力 / SSM（另一条路）</h2>
-<p class="trend">不稀疏化、也不驱逐，而是换掉 softmax 注意力本身，把复杂度从 O(n²) 压到 O(n)。</p>
+<p class="trend">不稀疏化、也不驱逐，而是换掉 softmax 注意力本身，把复杂度从 O(n²) 压到 O(n)：RWKV 走 RNN 递推，Mamba 走选择性状态空间，Mamba-2 用 SSD 证明「SSM 和注意力是一家」。这条线的完整演进（DeltaNet / Gated DeltaNet / TTT / Titans，以及 Kimi K3、Qwen3-Next 的混合旗舰）单独成篇，见 <a href="linear-sparse-attention.html">linear-sparse-attention.html</a>。</p>
 
 <p class="paper"><b>RWKV</b>（<a href="https://arxiv.org/abs/2305.13048">2305.13048</a>）<br>
 <code class="recipe">RWKV: linear -&gt; O(n) [RNN 式线性注意力]</code><br>
