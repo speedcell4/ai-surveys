@@ -6,7 +6,8 @@
 - [统一多模态模型速览](surveys/unified-multimodal.html) — 理解 + 生成统一模型，Tuna 家族深读，18 篇
 - [Grammar Induction / Unsupervised Parsing 速览](surveys/grammar-induction.html) — 无监督句法分析，2010 ~ 2026，81 篇
 - [长上下文（Long Context）速览](surveys/long-context.html) — 稀疏/硬件高效注意力、attention sink、KV 驱逐与压缩、位置外推、训练与 benchmark，2020 ~ 2026，65 篇
-- [线性 & 稀疏注意力速览](surveys/linear-sparse-attention.html) — 线性 / SSM / delta / TTT / 稀疏 + Qwen3-Next、Kimi K3、MiniMax M2 混合旗舰，2020 ~ 2026，50 篇
+- [线性注意力速览](surveys/linear-attention.html) — kernel 线性 / SSM / delta / TTT / Titans + Qwen3-Next、Kimi K3 混合旗舰，2020 ~ 2026，33 篇
+- [稀疏注意力速览](surveys/sparse-attention.html) — 选 block 还是选 token + DeepSeek NSA/DSA/CSA/HCA，2019 ~ 2026，18 篇
 
 > 新增论文/续写速览前，先读 [AGENTS.md](AGENTS.md)，里面是这套「配方 + 一句话」格式的完整规范。
 

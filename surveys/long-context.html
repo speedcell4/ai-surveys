@@ -48,7 +48,7 @@ li { margin:.35em 0; }
 <tr><th>记号</th><th>意思</th></tr>
 <tr><td><code>dense</code></td><td>全注意力（每 token 看所有历史），O(n²)，精确但贵</td></tr>
 <tr><td><code>sparse</code></td><td>稀疏注意力：滑窗 / 全局 / 随机 / block / landmark / 检索，子平方</td></tr>
-<tr><td><code>linear / ssm</code></td><td>线性注意力 / 状态空间模型，O(n)，详见 <a href="linear-sparse-attention.html">linear-sparse-attention.html</a></td></tr>
+<tr><td><code>linear / ssm</code></td><td>线性注意力 / 状态空间模型，O(n)，详见 <a href="linear-attention.html">linear-attention.html</a></td></tr>
 <tr><td><code>flash / paged</code></td><td>不改变数学、只优化实现：IO 感知（FlashAttention）/ 分页 KV（PagedAttention）</td></tr>
 <tr><td><code>evict / compress</code></td><td>KV 驱逐 / 压缩：按分数丢掉不重要的 KV，省显存</td></tr>
 <tr><td><code>sink</code></td><td>attention sink：保留/学习几个「吸收注意力」的 sink token</td></tr>
@@ -142,7 +142,7 @@ li { margin:.35em 0; }
 </div>
 
 <h2>4. 稀疏注意力（2023-2026，sink 之后的主战场）</h2>
-<p class="trend">sink 不再卡脖子之后，主战场转向<b>原生稀疏注意力</b>：把稀疏性做成端到端可训练、硬件对齐，去冲 64K → 1M → 16M。核心矛盾是「怎么选才又准、又便宜、又可训练」——早期靠手工规则（Landmark、MInference），后来靠 MoE 式 block 路由（MoBA）、学出来的阈值（SeerAttention）、可切换 dense↔sparse（InfLLM-v2），直到层级 landmark + 端到端检索分数（HiLS）。这条线与 <a href="linear-sparse-attention.html">linear-sparse-attention.html</a> 的稀疏章呼应。</p>
+<p class="trend">sink 不再卡脖子之后，主战场转向<b>原生稀疏注意力</b>：把稀疏性做成端到端可训练、硬件对齐，去冲 64K → 1M → 16M。核心矛盾是「怎么选才又准、又便宜、又可训练」——早期靠手工规则（Landmark、MInference），后来靠 MoE 式 block 路由（MoBA）、学出来的阈值（SeerAttention）、可切换 dense↔sparse（InfLLM-v2），直到层级 landmark + 端到端检索分数（HiLS）。稀疏注意力的完整演进（含选 block vs 选 token、DeepSeek NSA/DSA/CSA/HCA）见 <a href="sparse-attention.html">sparse-attention.html</a>。</p>
 
 <p class="paper"><b>RingAttention（Blockwise Transformers）</b>（<a href="https://arxiv.org/abs/2310.01889">2310.01889</a>，Liu et al. 2023，ICLR 2024）<br>
 <code class="recipe">dense(分块环形) -&gt; 近无限上下文 [分布式分块注意力]</code><br>
@@ -281,7 +281,7 @@ li { margin:.35em 0; }
 <span class="idea"><span class="p">问题</span> RoPE 的长期衰减让远处 token 交互变弱；<span class="p">方法</span> 只保留 RoPE 的高频分量、去掉低频，从理论打破长期衰减；<span class="p">核心</span> 位置编码与「长期衰减」解耦。</span></p>
 
 <h2>7. 线性注意力 / SSM（另一条路）</h2>
-<p class="trend">不稀疏化、也不驱逐，而是换掉 softmax 注意力本身，把复杂度从 O(n²) 压到 O(n)：RWKV 走 RNN 递推，Mamba 走选择性状态空间，Mamba-2 用 SSD 证明「SSM 和注意力是一家」。这条线的完整演进（DeltaNet / Gated DeltaNet / TTT / Titans，以及 Kimi K3、Qwen3-Next 的混合旗舰）单独成篇，见 <a href="linear-sparse-attention.html">linear-sparse-attention.html</a>。</p>
+<p class="trend">不稀疏化、也不驱逐，而是换掉 softmax 注意力本身，把复杂度从 O(n²) 压到 O(n)：RWKV 走 RNN 递推，Mamba 走选择性状态空间，Mamba-2 用 SSD 证明「SSM 和注意力是一家」。这条线的完整演进（DeltaNet / Gated DeltaNet / TTT / Titans，以及 Kimi K3、Qwen3-Next 的混合旗舰）单独成篇，见 <a href="linear-attention.html">linear-attention.html</a>。</p>
 
 <p class="paper"><b>RWKV</b>（<a href="https://arxiv.org/abs/2305.13048">2305.13048</a>，Peng et al. 2023）<br>
 <code class="recipe">linear(RNN) -&gt; O(n) [WKV 线性注意力]</code><br>
@@ -394,7 +394,7 @@ li { margin:.35em 0; }
 </ol>
 
 <hr>
-<p class="note">说明：核心论文（StreamingLLM / H2O / Gated Attention / GPT-OSS / HiLS / FlashAttention / PI / YaRN 等）已读原文摘要/方法，其余为标题 + 通识归纳；所有 arXiv 号均逐一核对。稀疏注意力细节与 attention sink 脉络与本文件互链；线性/SSM 的完整演进见 <a href="linear-sparse-attention.html">linear-sparse-attention.html</a>。</p>
+<p class="note">说明：核心论文（StreamingLLM / H2O / Gated Attention / GPT-OSS / HiLS / FlashAttention / PI / YaRN 等）已读原文摘要/方法，其余为标题 + 通识归纳；所有 arXiv 号均逐一核对。稀疏注意力单独成篇：<a href="sparse-attention.html">sparse-attention.html</a>；线性/SSM 的完整演进见 <a href="linear-attention.html">linear-attention.html</a>。</p>
 
 </main>
 </body>

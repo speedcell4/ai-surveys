@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>稀疏注意力速览</title>
+<style>
+:root { --accent:#7c3aed; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#f5f3ff; }
+* { box-sizing: border-box; }
+body { margin:0; background:#fafafa; color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  line-height:1.75; font-size:16px; }
+.container { max-width:940px; margin:0 auto; padding:44px 28px 96px; background:#fff; box-shadow:0 0 0 1px var(--border); min-height:100vh; }
+h1 { font-size:1.75em; line-height:1.35; border-bottom:2px solid var(--accent); padding-bottom:.4em; margin:.1em 0 .2em; }
+.sub { color:var(--muted); margin-top:0; }
+h2 { font-size:1.32em; margin-top:2.2em; border-bottom:1px solid var(--border); padding-bottom:.3em; }
+h3 { font-size:1.1em; margin-top:1.8em; color:#111827; }
+a { color:var(--accent); text-decoration:none; }
+a:hover { text-decoration:underline; }
+table { width:100%; border-collapse:collapse; margin:1.2em 0; font-size:.94em; }
+th,td { border:1px solid var(--border); padding:.5em .75em; text-align:left; vertical-align:top; }
+th { background:#f5f3ff; }
+tr:nth-child(even) td { background:#fafafa; }
+blockquote { border-left:4px solid var(--accent); margin:1.2em 0; padding:.5em 1em; background:var(--bg); color:#374151; border-radius:0 6px 6px 0; }
+.paper { margin:1.25em 0; }
+.paper b { color:#111827; }
+code.recipe { display:inline-block; margin:.4em 0; background:var(--bg); border-left:3px solid var(--accent); padding:.34em .72em; border-radius:5px; font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:.9em; color:#111827; }
+.idea { color:#374151; }
+.idea .p { color:#b91c1c; font-weight:600; }
+.trend { color:#374151; background:#f5f3ff; border-left:3px solid #7c3aed; padding:.55em .85em; border-radius:5px; margin:.55em 0 1.1em; }
+.deep { background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:.1em 1em .5em; margin:1em 0; }
+hr { border:none; border-top:1px solid var(--border); margin:2.2em 0; }
+.note { color:var(--muted); font-size:.9em; }
+ol,ul { padding-left:1.5em; }
+li { margin:.35em 0; }
+@media (max-width:640px){ .container{padding:28px 16px 64px;} body{font-size:15px;} }
+</style>
+</head>
+<body>
+<main class="container">
+
+<h1>稀疏注意力速览（Sparse Attention，2019 ~ 2026）</h1>
+<p class="sub">保留精确注意力、只算「选中的」token 对——核心问题是<b>选 block 还是选 token、怎么选</b> · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话（问题 / 方法 / 核心）</p>
+
+<h2>0. 记法（这个领域的「最大公约数」）</h2>
+<p>稀疏注意力 = 不把 O(n²) 的注意力矩阵全算一遍，而是先「选」出值得算的 token 对，再在子集上做精确注意力。所有方法的差别最终落在两个轴：<b>选择粒度</b>（选 block 还是选 token）和<b>选择方式</b>（手工规则 / 路由 / 学习）。配方围绕这两轴：</p>
+<table>
+<tr><th>记号</th><th>意思</th></tr>
+<tr><td><code>dense</code></td><td>全注意力，O(n²)，不选、全算</td></tr>
+<tr><td><code>sparse(block)</code></td><td><b>块级选择</b>：挑连续的 token 块，块内保留全部 token</td></tr>
+<tr><td><code>sparse(token)</code></td><td><b>token 级选择</b>：直接挑单个 token（细粒度）</td></tr>
+<tr><td><code>compress(m:1)</code></td><td><b>块压缩</b>：每 m 个连续 token 压成 1 个 KV 条目（m=4/32/128）</td></tr>
+<tr><td><code>select(rule|route|learned)</code></td><td>选择方式：手工规则 / MoE 式路由 / 端到端学习</td></tr>
+<tr><td><code>landmark</code></td><td>每个 block 用 landmark 代表，先检索块再做局部注意力</td></tr>
+<tr><td><code>hybrid</code></td><td>多种稀疏模式 / 稀疏+滑窗 / 稀疏+线性 交错</td></tr>
+</table>
+<p>配方格式：<code>模型: sparse(&lt;block|token&gt; + 选择方式) -&gt; &lt;复杂度/上下文&gt; [选择机制]</code>。例：<code>MoBA: sparse(block + route) -&gt; 10M [MoE 式块路由]</code>。</p>
+<blockquote>一句话分清两派：<b>选 block</b> = 一次挑一整块连续 token（实现便宜、对齐硬件，但块内可能有冗余）；<b>选 token</b> = 一个个挑最相关的 token（更精细、召回更准，但选择本身和硬件对齐更难）。DeepSeek 从 NSA 的「选 block」演进到 DSA 的「选 token」，再到 V4 用「块压缩 + 条目选择」的 CSA/HCA，就是这条粒度的权衡史。</blockquote>
+
+<h2>1. 主线：从「算不动」到「选得准」，粒度越做越细</h2>
+<ol>
+<li><b>2019-2020 早期（算得动）</b>：Sparse Transformer / Reformer / Longformer / BigBird 用固定稀疏模式（滑窗、全局、随机、哈希）把复杂度降下来，不关心「选得准不准」。</li>
+<li><b>2023-2024 检索式（选得对）</b>：Landmark / MInference / MoBA 开始按「相关性」动态选块，把稀疏从「固定模式」变成「检索/路由」。</li>
+<li><b>2025 DeepSeek NSA → DSA（原生 + 粒度细化）</b>：NSA 把压缩、块选择、滑窗三路做成「硬件对齐、原生可训练」；DSA 把选择粒度从 block 细化到 token。</li>
+<li><b>2026 DeepSeek V4 CSA + HCA（压缩 + 混合）</b>：先在序列维度把 KV 压缩（4:1 的 CSA、128:1 的 HCA），再在压缩条目上做稀疏/密集注意力，把 1M token 的 KV 和 FLOPs 都砍到 V3.2 的约 1/10。</li>
+</ol>
+<p>两条并行轴：<b>选择粒度</b>（block → token）、<b>选择方式</b>（固定 → 路由 → 学习 → 压缩后选择）。交点是一个开放问题：<b>是先压缩再选（CSA/HCA），还是先选再算（DSA/Seer）？</b></p>
+
+<h2>2. 早期稀疏注意力（2019-2020，先让长序列算得动）</h2>
+<p class="trend">第一代只求「跑得动」：用固定稀疏模式替代全注意力，不追求动态选择。这段的遗产是「注意力不必是 O(n²)」。更完整的 hardware 视角（FlashAttention / PagedAttention）见 <a href="long-context.html">long-context.html</a>。</p>
+
+<p class="paper"><b>Sparse Transformer</b>（<a href="https://arxiv.org/abs/1904.10509">1904.10509</a>，Child et al. 2019）<br>
+<code class="recipe">sparse(fixed) -&gt; O(n√n) [strided + fixed 两种固定模式]</code><br>
+<span class="idea"><span class="p">问题</span> 注意力时间/显存随长度平方涨；<span class="p">方法</span> 把注意力矩阵分解成 strided（跨步）和 fixed（固定局部）两种稀疏模式；<span class="p">核心</span> 稀疏注意力开山，复杂度 O(n√n)。</span></p>
+
+<p class="paper"><b>Reformer</b>（<a href="https://arxiv.org/abs/2001.04451">2001.04451</a>，Kitaev et al. 2020）<br>
+<code class="recipe">sparse(LSH) -&gt; O(n log n) [局部敏感哈希 + 可逆残差]</code><br>
+<span class="idea"><span class="p">问题</span> 全注意力算不动、还要存激活；<span class="p">方法</span> 用局部敏感哈希只让相似 token 互相注意，配可逆残差省激活内存；<span class="p">核心</span> 哈希近似注意力路线。</span></p>
+
+<p class="paper"><b>Longformer</b>（<a href="https://arxiv.org/abs/2004.05150">2004.05150</a>，Beltagy et al. 2020）<br>
+<code class="recipe">sparse(滑窗+全局+膨胀) -&gt; O(n) [三种模式组合]</code><br>
+<span class="idea"><span class="p">问题</span> 长文档放不进全注意力；<span class="p">方法</span> 组合滑窗、任务相关全局 token、膨胀窗口；<span class="p">核心</span> O(n) 复杂度，长文档 NLP 常用底座。</span></p>
+
+<p class="paper"><b>BigBird</b>（<a href="https://arxiv.org/abs/2007.14062">2007.14062</a>，Zaheer et al. 2020）<br>
+<code class="recipe">sparse(随机+滑窗+全局) -&gt; O(n) [随机图 + 理论保证]</code><br>
+<span class="idea"><span class="p">问题</span> 稀疏注意力凭什么能替代全注意力；<span class="p">方法</span> 随机、滑窗、全局三类边的稀疏图，给出图灵完备性理论；<span class="p">核心</span> 既省算力又带理论保证。</span></p>
+
+<h2>3. DeepSeek 稀疏注意力谱系（NSA → DSA → CSA + HCA）</h2>
+<p class="trend">这是「选 block 还是选 token」最清晰的一条演进线：NSA 把稀疏做成<b>原生可训练 + 硬件对齐</b>，选择粒度是 <b>block</b>；DSA 用「闪电索引器」把粒度细化到 <b>token</b>；V4 的 CSA / HCA 反过来先<b>块压缩</b> KV，再在压缩条目上选择或直接密集，把 1M token 的成本砍到 V3.2 的约 1/10。</p>
+
+<div class="deep">
+<p class="paper"><b>NSA（Native Sparse Attention，DeepSeek）</b>（<a href="https://arxiv.org/abs/2502.11089">2502.11089</a>，Yuan et al. 2025，ACL 2025 Best Paper）<br>
+<code class="recipe">sparse(block) -&gt; 64K 原生可训练 [压缩 + 块选择 + 滑窗三路]</code><br>
+<span class="idea"><span class="p">问题</span> 稀疏注意力要么不可原生训练、要么硬件不友好；<span class="p">方法</span> 三路并行：token 压缩（每块压成 1 个粗 token）、<b>块级 token 选择</b>（按块重要性选 top-k 块、块内保留细粒度 token）、滑动窗口，统一成硬件对齐算子、端到端训练；<span class="p">核心</span> 27B 模型匹配 full attention、64K 加速，「原生稀疏 + 硬件对齐」的标杆，选择粒度是 block。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>DSA（DeepSeek Sparse Attention，DeepSeek-V3.2）</b>（<a href="https://arxiv.org/abs/2512.02556">2512.02556</a>，DeepSeek-AI 2025）<br>
+<code class="recipe">sparse(token) -&gt; 细粒度 token 选择 [lightning indexer + top-k token]</code><br>
+<span class="idea"><span class="p">问题</span> NSA 选 block 会带进块内冗余，能不能更细地选到单个 token；<span class="p">方法</span> 用「闪电索引器」（lightning indexer）算 query 与每个前序 token 的廉价索引分，直接选 top-k 个<b>单个 token</b>（细粒度）；<span class="p">核心</span> 把稀疏选择的粒度从 block 细化到 token，是 V3.2-Exp 的注意力，长上下文训练/推理效率大升。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>CSA（Compressed Sparse Attention，DeepSeek-V4）</b>（<a href="https://arxiv.org/abs/2606.19348">2606.19348</a>，DeepSeek-AI 2026）<br>
+<code class="recipe">compress(4:1) + sparse(entry) -&gt; 精确检索 [块压缩后 DSA 选择，top-k=512]</code><br>
+<span class="idea"><span class="p">问题</span> 直接对原始 token 做稀疏选择，KV 和 FLOPs 在 1M 尺度仍太重；<span class="p">方法</span> 先把每 4 个连续 token 压成 1 个 KV 条目（压缩率 4），再对压缩条目做 DSA 式稀疏选择（索引器 64 头、维 128、top-k 512）；<span class="p">核心</span> V4 的「精确检索」路径——先块压缩、再条目选择，兼顾召回与成本。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>HCA（Heavily Compressed Attention，DeepSeek-V4）</b>（<a href="https://arxiv.org/abs/2606.19348">2606.19348</a>，DeepSeek-AI 2026）<br>
+<code class="recipe">compress(128:1) + dense -&gt; 全局粗视野 [重度压缩后密集注意力]</code><br>
+<span class="idea"><span class="p">问题</span> 需要一个「全局粗粒度」视角来补 CSA 的局部精确；<span class="p">方法</span> 每 128 个连续 token 压成 1 个条目，之后<b>不再稀疏选择、直接密集注意力</b>；<span class="p">核心</span> V4 的「全局视野」路径——重度压缩 + 密集，和 CSA 混合成 61 层（30 c4a + 31 c128a，外加最近 128 token 的滑窗原始 KV）。</span></p>
+</div>
+
+<p class="paper"><b>DeepSeek-V4（混合注意力全景）</b>（<a href="https://arxiv.org/abs/2606.19348">2606.19348</a>，DeepSeek-AI 2026）<br>
+<code class="recipe">hybrid(CSA + HCA + SWA) -&gt; 1M token [压缩 + 稀疏 + 滑窗交错]</code><br>
+<span class="idea"><span class="p">问题</span> 1M token 上下文里注意力是主要计算瓶颈；<span class="p">方法</span> 混合 CSA（4:1 压缩 + 稀疏选择）、HCA（128:1 压缩 + 密集）、SWA（最近窗口原始 KV），配 MoE + Muon；<span class="p">核心</span> 1M 上下文下 V4-Pro 单 token FLOPs 只有 V3.2 的 27%、KV 缓存只有 10%。</span></p>
+
+<h2>4. block 级选择派（一次挑一整块）</h2>
+<p class="trend">选 block 的好处是硬件友好（连续内存、好做 kernel）、实现便宜；代价是块内 token 可能冗余。代表：MoBA 用 MoE 路由选块、Landmark/HiLS 用 landmark 代表块、MiniMax SA 用层次化块稀疏、MInference 识别块稀疏模式。</p>
+
+<p class="paper"><b>MoBA（Mixture of Block Attention，Kimi）</b>（<a href="https://arxiv.org/abs/2502.13189">2502.13189</a>，2025）<br>
+<code class="recipe">sparse(block + route) -&gt; 10M 上下文 [MoE 式块路由]</code><br>
+<span class="idea"><span class="p">问题</span> 稀疏注意力怎么又高效又选对块；<span class="p">方法</span> 把 MoE 路由搬到注意力，每个 query 只路由到少数相关 block；<span class="p">核心</span> 「注意力 MoE 化」，Kimi 10M 上下文的底座。</span></p>
+
+<p class="paper"><b>Landmark Attention</b>（<a href="https://arxiv.org/abs/2305.16300">2305.16300</a>，Mohtashami &amp; Jaggi 2023）<br>
+<code class="recipe">sparse(block + landmark) -&gt; 无限上下文 [landmark 代表块 + 检索]</code><br>
+<span class="idea"><span class="p">问题</span> 全注意力算不了无限长；<span class="p">方法</span> 每个 block 用 landmark token 做代表，query 先检索相关 block 再做局部注意力；<span class="p">核心</span> 检索式块稀疏的早期代表。</span></p>
+
+<p class="paper"><b>HiLS Attention</b>（<a href="https://arxiv.org/abs/2607.02980">2607.02980</a>，2026）<br>
+<code class="recipe">sparse(block + 层级 landmark) -&gt; 64× 外推 [端到端 chunk 检索]</code><br>
+<span class="idea"><span class="p">问题</span> chunk 稀疏注意力选不准、追不上 full attention；<span class="p">方法</span> query 先对各 chunk 独立算注意力提取 chunk 信息，再按检索分数融合，检索分数端到端可学习；<span class="p">核心</span> 原生稀疏训练，64× 外推仍有 90% 检索准确率，现有模型轻量续训即可转换。</span></p>
+
+<p class="paper"><b>MiniMax Sparse Attention（MSA）</b>（<a href="https://arxiv.org/abs/2606.13392">2606.13392</a>，2026）<br>
+<code class="recipe">sparse(block + 局部) -&gt; 十万到百万 token [层次化块稀疏]</code><br>
+<span class="idea"><span class="p">问题</span> agentic / 仓库级代码要求几十万到百万 token 联合注意力，softmax 部署不起；<span class="p">方法</span> blockwise 稀疏 + 局部窗口，训练推理都稀疏；<span class="p">核心</span> 工业级块稀疏的落地。</span></p>
+
+<p class="paper"><b>MInference</b>（<a href="https://arxiv.org/abs/2407.02490">2407.02490</a>，Jiang et al. 2024）<br>
+<code class="recipe">sparse(block + 动态模式) -&gt; 10× 预填充加速 [A-shape / VS / Block-Sparse]</code><br>
+<span class="idea"><span class="p">问题</span> 长上下文预填充太慢；<span class="p">方法</span> 免训识别 A-shape、Vertical-Slash、Block-Sparse 三种动态稀疏模式并据此计算；<span class="p">核心</span> 动态块稀疏，prefill 加速一个数量级。</span></p>
+
+<h2>5. token 级选择派（一个个挑最相关的）</h2>
+<p class="trend">选 token 更精细、召回更准，但选择本身和硬件对齐更难。代表是「学出来的阈值」（SeerAttention）和 DeepSeek 的 DSA（见 §3）。与之相邻的「KV 驱逐」也常是 token 级（H2O / SnapKV / Quest），但驱逐是「丢掉 KV」而非「跳过计算」，见 <a href="long-context.html">long-context.html</a> §5。</p>
+
+<p class="paper"><b>SeerAttention（Learning Intrinsic Sparse Attention）</b>（<a href="https://arxiv.org/abs/2410.13276">2410.13276</a>，2025）<br>
+<code class="recipe">sparse(token + learned) -&gt; 90% 稀疏 [端到端学注意力阈值]</code><br>
+<span class="idea"><span class="p">问题</span> 手工稀疏规则不通用；<span class="p">方法</span> 让模型端到端学习「哪些 token 对的注意力该保留」的阈值，达到内在稀疏；<span class="p">核心</span> 「学出来的 token 级稀疏」而非手工设计。</span></p>
+
+<p class="paper"><b>H2O（Heavy-Hitter Oracle）</b>（<a href="https://arxiv.org/abs/2306.14048">2306.14048</a>，2023，交叉引用）<br>
+<code class="recipe">evict(token) -&gt; KV 压缩 [保留 heavy-hitter token]</code><br>
+<span class="idea"><span class="p">问题</span> KV 缓存线性涨；<span class="p">方法</span> 注意力分数重尾，保留少数 heavy-hitter token + 最近 token；<span class="p">核心</span> token 级「驱逐」的起点，是稀疏选择的近亲（详见 long-context）。</span></p>
+
+<h2>6. 可切换 / 分布式（短长自适应与跨设备）</h2>
+<p class="trend">两条工程化支线：短上下文要 dense、长上下文要 sparse，能否无缝切换（InfLLM-v2）；以及长序列单卡放不下，能否分布式分块（RingAttention）。</p>
+
+<p class="paper"><b>InfLLM-v2（Dense-Sparse Switchable）</b>（<a href="https://arxiv.org/abs/2509.24663">2509.24663</a>，2025）<br>
+<code class="recipe">sparse↔dense 可切换 -&gt; 短长自适应 [语义块检索]</code><br>
+<span class="idea"><span class="p">问题</span> 短上下文要 dense、长上下文要 sparse，难兼得；<span class="p">方法</span> dense/sparse 可切换，短时全注意力、长时检索稀疏；<span class="p">核心</span> 无缝短到长自适应。</span></p>
+
+<p class="paper"><b>RingAttention</b>（<a href="https://arxiv.org/abs/2310.01889">2310.01889</a>，Liu et al. 2023）<br>
+<code class="recipe">dense(分块环形) -&gt; 近无限上下文 [分布式分块注意力]</code><br>
+<span class="idea"><span class="p">问题</span> 长序列单卡放不下、注意力矩阵爆炸；<span class="p">方法</span> 序列分块、按环在设备间传递 KV，块间做注意力；<span class="p">核心</span> 分布式分块把 dense 扩到百万级（严格说不是稀疏，是分布式的块化 dense）。</span></p>
+
+<h2>7. 共识与分歧（速记版）</h2>
+<p><b>共识：</b></p>
+<ol>
+<li>稀疏注意力保留「精确注意力」，只是挑着算，比线性压缩更接近 softmax 的召回质量。</li>
+<li>「原生可训练 + 硬件对齐」是 2025 后的硬标准（NSA 确立，HiLS/CSA 延续）。</li>
+<li>选择粒度是核心权衡：block 便宜但冗余，token 精确但难对齐，DeepSeek 从 NSA（block）→ DSA（token）→ CSA/HCA（块压缩 + 条目选择）完整走了一遍。</li>
+<li>旗舰里稀疏不再单打独斗，而是和「滑窗 / 线性 / 全注意力」混合（V4 = CSA + HCA + SWA）。</li>
+</ol>
+<p><b>分歧 / 难点：</b></p>
+<ol>
+<li><b>先压缩还是先选</b>：先块压缩再选择（CSA/HCA，省 KV）vs 先选原始 token 再算（DSA/Seer，保精度），谁更优没有定论。</li>
+<li><b>选择方式</b>：手工规则（MInference）vs MoE 路由（MoBA）vs 端到端学习（SeerAttention/HiLS），可训练性 vs 实现复杂度在拉扯。</li>
+<li><b>block vs token 的最优粒度</b>：理论上 token 更准，但 block 的硬件收益常压倒精度损失，最优粒度随长度和硬件变化。</li>
+<li><b>评测</b>：稀疏注意力在 RULER/LongBench 上的收益，容易和「数据/RL」收益混在一起，难单独归因。</li>
+</ol>
+
+<hr>
+<p class="note">说明：DeepSeek 谱系（NSA 2502.11089、DSA/V3.2 2512.02556、CSA+HCA/V4 2606.19348）已读原文/技术报告；其余论文摘要/标题经核实，arXiv 号均逐一核对。早期稀疏（Sparse Transformer 等）与 hardware 视角（FlashAttention/PagedAttention）的更完整展开见 <a href="long-context.html">long-context.html</a>；线性注意力那条路见 <a href="linear-attention.html">linear-attention.html</a>。</p>
+
+</main>
+</body>
+</html>

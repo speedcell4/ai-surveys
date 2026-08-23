@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>线性注意力 & 稀疏注意力速览</title>
+<title>线性注意力速览</title>
 <style>
 :root { --accent:#0e7490; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#ecfeff; }
 * { box-sizing: border-box; }
@@ -39,11 +39,11 @@ li { margin:.35em 0; }
 <body>
 <main class="container">
 
-<h1>线性注意力 &amp; 稀疏注意力速览（Subquadratic 架构，2020 ~ 2026）</h1>
-<p class="sub">逃出 O(n²)：一条路把历史压缩进定长 state（linear / SSM / delta / TTT），一条路只算重要的 token 对（sparse）· 2025 起汇流成「混合」· 检索时间 2026-08-23 · 每篇 = 配方 + 一句话（问题 / 方法 / 核心）</p>
+<h1>线性注意力速览（Linear Attention，2020 ~ 2026）</h1>
+<p class="sub">把历史压缩进定长 state，复杂度 O(n)：kernel 线性 / SSM / delta 规则 / TTT / Titans，及 2025 起的混合旗舰 · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话（问题 / 方法 / 核心）</p>
 
 <h2>0. 记法（这个领域的「最大公约数」）</h2>
-<p>核心矛盾：softmax 注意力每个 token 都要看全部历史，复杂度 O(n²)，KV 缓存随长度线性涨。所有方法在回答同一件事——<b>用定长 state 压缩历史（线性），还是只算重要的 token 对（稀疏）</b>。配方围绕「注意力怎么做 + state 怎么更新」两轴：</p>
+<p>核心矛盾：softmax 注意力每个 token 都要看全部历史，复杂度 O(n²)。线性注意力这条路线用<b>定长 state 压缩全部历史</b>，把复杂度压到 O(n)、解码内存 O(1)——代价是「记不全」。配方围绕「state 怎么更新」这一轴（另一条路「只算重要的 token 对」见 <a href="sparse-attention.html">sparse-attention.html</a>）：</p>
 <table>
 <tr><th>记号</th><th>意思</th></tr>
 <tr><td><code>dense</code></td><td>全 softmax 注意力，O(n²)，精确检索但算不起</td></tr>
@@ -54,20 +54,19 @@ li { margin:.35em 0; }
 <tr><td><code>ssm</code></td><td>状态空间模型（Mamba / Mamba-2），选择性转移</td></tr>
 <tr><td><code>ttt</code></td><td>test-time training 层：hidden state 本身是个 ML 模型</td></tr>
 <tr><td><code>mem</code></td><td>神经记忆（Titans）：按「惊讶度」决定记什么</td></tr>
-<tr><td><code>sparse(block|landmark|learned)</code></td><td>稀疏注意力：只算选中的 token 对，子平方</td></tr>
 <tr><td><code>hybrid(linear+dense)</code></td><td>混合：线性层做长程压缩 + 全注意力层做精确检索</td></tr>
 </table>
 <p>配方格式：<code>模型: &lt;注意力/复杂度&gt; -&gt; &lt;能做什么&gt; [state 更新 / 稀疏选择机制]</code>。例：<code>Gated DeltaNet: linear(gdelta) -&gt; O(n) [门控遗忘 + delta 编辑]</code>。</p>
 
-<h2>1. 主线：从「两条路各走各的」到「汇成混合」</h2>
+<h2>1. 主线：从「快但记不住」到「又快又记得住」</h2>
 <ol>
 <li><b>2020-2023 线性注意力（kernel 线）</b>：把 softmax 换成核函数，注意力变成「固定 size 矩阵 state + 递归更新」，复杂度 O(n)、解码 O(1) 内存。代表：Linear Attention、Performer、RetNet、GLA、Lightning Attention-2。优点快，缺点——<b>state 是加性的、只会「越叠越多」，精确 recall（召回某个具体 token）比 softmax 差</b>。</li>
 <li><b>2023-2024 SSM 线</b>：Mamba / Mamba-2 用「选择性状态转移」补表达力，xLSTM 用门控复活 LSTM，线性 RNN 跟线性注意力其实是同一族（Mamba-2 的 SSD 框架把 SSM 和注意力统一）。</li>
 <li><b>2024-2025 Delta 规则线（转折）</b>：DeltaNet 把 state 的更新从「叠加」改成「先删后写」的 delta 规则，精确 recall 大幅回升；Gated DeltaNet 再补一个门控快速遗忘。这是线性注意力「从快但记不住，到又快又记得住」的关键一步。</li>
 <li><b>2024-2025 Test-time learning</b>：TTT 把 hidden state 本身做成一个 ML 模型、用 self-supervised 一步更新；Titans 给注意力配一个「按惊讶度记忆」的神经长期记忆。线性注意力有了第三种「更会记」的 state。</li>
-<li><b>2025-2026 汇流成混合</b>：Qwen3-Next（Gated DeltaNet + Gated Attention 3:1）、Kimi K2/K3（KDA 线性 + 潜注意力）、MiniMax M2（Lightning 线性 + 稀疏）都表明——<b>线性/稀疏单独都不够，把「便宜的线性压缩」和「贵但准的注意力检索」按层混合，才是旗舰的最优解</b>。线性层管长程、全注意力/稀疏层管精确召回。</li>
+<li><b>2025-2026 汇流成混合</b>：Qwen3-Next（Gated DeltaNet + Gated Attention 3:1）、Kimi K2/K3（KDA 线性 + 潜注意力）、MiniMax M2（Lightning 线性）都表明——<b>纯线性单独不够，把「便宜的线性压缩」和「贵但准的注意力检索」按层混合，才是旗舰的最优解</b>。线性层管长程、全注意力/稀疏层管精确召回。</li>
 </ol>
-<p>三条并行轴：<b>复杂度</b>（dense → linear/ssm → sparse → hybrid）、<b>state 更新规则</b>（叠加 → 门控 → delta → ttt/memory）、<b>精确 recall 能力</b>（越往后越接近 softmax）。</p>
+<p>三条并行轴：<b>复杂度</b>（dense → linear/ssm → hybrid）、<b>state 更新规则</b>（叠加 → 门控 → delta → ttt/memory）、<b>精确 recall 能力</b>（越往后越接近 softmax）。稀疏注意力那条路单独成篇，见 <a href="sparse-attention.html">sparse-attention.html</a>。</p>
 
 <h2>2. 先读这两篇（综述 + 对比）</h2>
 <p class="trend">按规范，先读 survey。这两篇一个给「谁最强」的横评，一个给「四种 delta 变体怎么区分的统一记法」，是快速建立地图的入口。</p>
@@ -186,34 +185,7 @@ li { margin:.35em 0; }
 <span class="idea"><span class="p">问题</span> RNN 压缩丢信息、注意力精确但 O(n²) 且有上下文上限；<span class="p">方法</span> 给注意力配一个「神经长期记忆」，作为 meta in-context learner 在测试时继续学、按惊讶度决定记什么；<span class="p">核心</span> 把「记忆」从注意力里拆出来变成一等模块，长短结合，是 TTT 思想到记忆架构的落地。</span></p>
 </div>
 
-<h2>7. 稀疏注意力（跨链 long-context）</h2>
-<p class="trend">线性是「压缩」，稀疏是「只算重要的」。两者互补：稀疏保留精确注意力、只是挑着算。本节与 <a href="long-context.html">long-context.html</a> 的稀疏章重叠，这里只给线性视角下最相关的几篇，细节可回看那边。</p>
-
-<p class="paper"><b>NSA（Native Sparse Attention，DeepSeek）</b>（<a href="https://arxiv.org/abs/2502.11089">2502.11089</a>，ACL 2025）<br>
-<code class="recipe">sparse(压缩+选择+滑窗) -&gt; 64K 原生可训练 [硬件对齐三路并行]</code><br>
-<span class="idea"><span class="p">问题</span> 稀疏注意力不可原生训练 / 硬件不友好；<span class="p">方法</span> token 压缩 + token 选择 + 滑窗三路统一成硬件对齐算子；<span class="p">核心</span> 原生稀疏 + 硬件对齐的标杆。</span></p>
-
-<p class="paper"><b>MoBA（Mixture of Block Attention，Kimi）</b>（<a href="https://arxiv.org/abs/2502.13189">2502.13189</a>，2025）<br>
-<code class="recipe">sparse(block 路由) -&gt; 10M 上下文 [MoE 式 block 选择]</code><br>
-<span class="idea"><span class="p">问题</span> 稀疏注意力怎么又高效又选对块；<span class="p">方法</span> 把 MoE 路由搬到注意力，每个 query 只路由到少数相关 block；<span class="p">核心</span> 注意力 MoE 化，Kimi 10M 上下文的底座。</span></p>
-
-<p class="paper"><b>SeerAttention</b>（<a href="https://arxiv.org/abs/2410.13276">2410.13276</a>，2025）<br>
-<code class="recipe">sparse(learned) -&gt; 90% 稀疏 [端到端学注意力阈值]</code><br>
-<span class="idea"><span class="p">问题</span> 手工稀疏规则不通用；<span class="p">方法</span> 端到端学习「哪些注意力该保留」的阈值；<span class="p">核心</span> 学出来的稀疏而非手工设计。</span></p>
-
-<p class="paper"><b>InfLLM-v2</b>（<a href="https://arxiv.org/abs/2509.24663">2509.24663</a>，2025）<br>
-<code class="recipe">sparse↔dense 可切换 -&gt; 短长自适应 [语义块检索]</code><br>
-<span class="idea"><span class="p">问题</span> 短上下文要 dense、长上下文要 sparse，难兼得；<span class="p">方法</span> dense/sparse 可切换；<span class="p">核心</span> 无缝短到长自适应。</span></p>
-
-<p class="paper"><b>HiLS Attention</b>（<a href="https://arxiv.org/abs/2607.02980">2607.02980</a>，2026）<br>
-<code class="recipe">sparse(层级 landmark) -&gt; 64× 外推 [端到端 chunk 检索]</code><br>
-<span class="idea"><span class="p">问题</span> chunk 稀疏注意力选不准、追不上 full attention；<span class="p">方法</span> 层级 landmark + 检索分数端到端可学习；<span class="p">核心</span> 原生稀疏训练，现有 full-attention 模型轻量续训即可转换。</span></p>
-
-<p class="paper"><b>MiniMax Sparse Attention（MSA）</b>（<a href="https://arxiv.org/abs/2606.13392">2606.13392</a>，2026）<br>
-<code class="recipe">sparse(blockwise) -&gt; 十万到百万 token [块稀疏 + 局部]</code><br>
-<span class="idea"><span class="p">问题</span> agentic / 仓库级代码 / 持久记忆要求几十万到百万 token 联合注意力，softmax 部署不起；<span class="p">方法</span> blockwise 稀疏注意力；<span class="p">核心</span> MiniMax 超长上下文的稀疏方案。</span></p>
-
-<h2>8. 新一代旗舰（混合架构：线性压缩 + 注意力检索）</h2>
+<h2>7. 新一代旗舰（混合架构：线性压缩 + 注意力检索）</h2>
 <p class="trend">2025 之后的最大共识：别二选一，<b>混合</b>。线性/SSM 层便宜、管长程压缩；全注意力或稀疏层贵、管精确召回；按 3:1 之类比例交错。三个开放旗舰都这么干。</p>
 
 <p class="paper"><b>Hymba（Hybrid-head Architecture）</b>（<a href="https://arxiv.org/abs/2411.13676">2411.13676</a>，NVIDIA 2024）<br>
@@ -240,10 +212,10 @@ li { margin:.35em 0; }
 <code class="recipe">MoE(线性注意力谱系) -&gt; agentic 前沿 [agent 数据 + Forge RL + 自进化]</code><br>
 <span class="idea"><span class="p">问题</span> 小激活（mini activation）能不能释放真实世界智能、并端到端服务 agentic 任务；<span class="p">方法</span> 229.9B 总参 / 9.8B 激活，三件套：agent 驱动的可验证轨迹数据、Forge 长程 RL 系统、M2.7 起步的自进化；<span class="p">核心</span> Lightning Attention 谱系（MiniMax 线性注意力）的旗舰，重点是 agentic RL 而非纯架构。</span></p>
 
-<h2>9. 训练数据与 Benchmark（单独一节）</h2>
+<h2>8. 训练数据与 Benchmark（单独一节）</h2>
 <p class="trend">子平方架构能不能训起来、训完到底「真长」还是「假长」，是另一条独立的线：用什么数据/优化器训（K2 的 MuonClip、M2 的 agent 数据），以及用什么 benchmark 照出 recall / 真实上下文长度。</p>
 
-<h3>9.1 训练侧</h3>
+<h3>8.1 训练侧</h3>
 <p class="paper"><b>MuonClip（Kimi K2 的优化器）</b>（见 <a href="https://arxiv.org/abs/2507.20534">2507.20534</a>）<br>
 <code class="recipe">optimizer(Muon + QK-clip) -&gt; 训练稳定 + token 高效 [clip 抑制尖峰]</code><br>
 <span class="idea"><span class="p">问题</span> 大模型预训练 loss 尖峰、Muon 不稳；<span class="p">方法</span> 给 Muon 加 QK-clip；<span class="p">核心</span> 15.5T token 零尖峰，是大规模训子平方模型的关键工程件。</span></p>
@@ -252,7 +224,7 @@ li { margin:.35em 0; }
 <code class="recipe">data(可执行轨迹) + RL(长程 agent) -&gt; 可验证训练信号 [artifact 对齐奖励]</code><br>
 <span class="idea"><span class="p">问题</span> agentic 模型缺大规模可验证训练轨迹、RL 扛不住长程；<span class="p">方法</span> agent 数据管道（编码/协同，落在可执行 workspace）+ Forge 长程 RL；<span class="p">核心</span> 说明 2025-2026 旗舰的竞争重心正从「架构」转向「数据 + RL」。</span></p>
 
-<h3>9.2 Benchmark</h3>
+<h3>8.2 Benchmark</h3>
 <p class="paper"><b>LongBench</b>（<a href="https://arxiv.org/abs/2308.14508">2308.14508</a>）<br>
 <code class="recipe">benchmark(双语多任务) -&gt; 长上下文理解 [6 类 21 任务]</code><br>
 <span class="idea"><span class="p">问题</span> 缺系统长上下文理解评测；<span class="p">方法</span> 中英双语单/多文档、检索、摘要、代码、合成；<span class="p">核心</span> 最常用的长上下文理解基准。</span></p>
@@ -269,7 +241,7 @@ li { margin:.35em 0; }
 <code class="recipe">benchmark(真实难任务) -&gt; 深度长上下文推理 [更难、需推理而非检索]</code><br>
 <span class="idea"><span class="p">问题</span> v1 偏检索、短模型也能蒙对；<span class="p">方法</span> 用「检索不够、要真推理」的真实难任务；<span class="p">核心</span> 区分「找得到」和「想得清」，旗舰主打的深度长上下文评测。</span></p>
 
-<h2>10. 共识与分歧（速记版）</h2>
+<h2>9. 共识与分歧（速记版）</h2>
 <p><b>共识：</b></p>
 <ol>
 <li>softmax 注意力是「精确但 O(n²)」，线性/SSM 是「便宜但定长 state 有 recall 上限」，两者不能互相替代。</li>
@@ -280,14 +252,14 @@ li { margin:.35em 0; }
 <p><b>分歧 / 难点：</b></p>
 <ol>
 <li><b>state 更新规则还没收敛</b>：叠加（线性注意力）→ 门控（GLA）→ delta（DeltaNet）→ 门控 delta（Gated DeltaNet）→ 分离擦除/写入（GDN-2）→ 双线性闭环（Comba）→ Kaczmarz（KLA），每篇都在改更新规则，说明「最优更新」未定。</li>
-<li><b>精确 recall 的兜底方式</b>：是用混合全注意力（Qwen/Kimi），还是给线性层挂精确 KV 补丁（HOLA），还是干脆学出来的稀疏（HiLS/Seer）——三条路并存。</li>
+<li><b>精确 recall 的兜底方式</b>：是用混合全注意力（Qwen/Kimi），还是给线性层挂精确 KV 补丁（HOLA），还是干脆学出来的稀疏（HiLS/Seer，见 <a href="sparse-attention.html">sparse-attention.html</a>）——三条路并存。</li>
 <li><b>哪个子平方架构最强没定论</b>：综述（2606.12364）在代码/时序上给了 xLSTM，但语言建模 + 长上下文上 Gated DeltaNet 家族占优，任务依赖强。</li>
-<li><b>线性 vs 稀疏谁主谁辅</b>：线性压缩上限是定长 state 的表达力，稀疏保留精确但子平方仍偏贵，二者在旗舰里的配比（3:1？）多是经验值，缺统一理论。</li>
+<li><b>线性 vs 注意力谁主谁辅</b>：线性压缩上限是定长 state 的表达力，注意力（含稀疏）保留精确但更贵，二者在旗舰里的配比（3:1？）多是经验值，缺统一理论。</li>
 <li><b>评测</b>：RULER 这类合成检索能照出 recall 掉点，但真实 agentic/推理任务（LongBench v2）里架构差异变小，架构收益难和「数据/RL」收益分开归因。</li>
 </ol>
 
 <hr>
-<p class="note">说明：种子与点名论文（Gated DeltaNet 2412.06464、Kimi K3 2607.24653、Qwen3-Next/Gated Attention 2505.06708、Titans 2501.00663、TTT 2407.04620、MiniMax M2 2605.26494）已读摘要/方法；所有 arXiv 号已逐一核对。稀疏注意力细节与 attention sink 脉络见 <a href="long-context.html">long-context.html</a>。「test-time training」在此按架构（TTT/Titans）并入本综述；经典 continual learning（EWC/重放/灾难性遗忘）是另一主题，未纳入。</p>
+<p class="note">说明：种子与点名论文（Gated DeltaNet 2412.06464、Kimi K3 2607.24653、Qwen3-Next/Gated Attention 2505.06708、Titans 2501.00663、TTT 2407.04620、MiniMax M2 2605.26494）已读摘要/方法；所有 arXiv 号已逐一核对。稀疏注意力单独成篇：<a href="sparse-attention.html">sparse-attention.html</a>；长上下文整体脉络见 <a href="long-context.html">long-context.html</a>。「test-time training」在此按架构（TTT/Titans）并入；经典 continual learning 是另一主题。</p>
 
 </main>
 </body>
