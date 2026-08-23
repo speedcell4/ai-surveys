@@ -77,19 +77,19 @@ window.MathJax = {
 
 <p class="paper"><b>PPO（Proximal Policy Optimization）</b>（<a href="https://arxiv.org/abs/1707.06347">1707.06347</a>，Schulman et al. 2017）<br>
 <code class="recipe">pg + clip -&gt; 稳定策略更新 [clip 信任域 + 价值模型 baseline]</code><br>
-<span class="idea"><span class="p">问题</span> 策略梯度更新步长难控、易崩；<span class="p">方法</span> 用 clip 把更新限制在信任域内，配价值模型估 advantage；<span class="p">核心</span> 事实标准的 RL 算法，LLM RL 的起点。</span></p>
+<span class="idea"><span class="p">问题</span> 策略梯度更新步长难控、易崩；<span class="p">方法</span> 用 clip 把更新限制在信任域内，配价值模型估 advantage；<span class="p">核心</span> 事实标准的 RL 算法，LLM RL 的起点；后续 RLOO / GRPO 指出价值模型和策略同规模、训练开销翻倍，改成 critic-free——PPO 的 clip 被保留、价值模型这条被逐步弃。</span></p>
 
 <p class="paper"><b>InstructGPT / RLHF</b>（<a href="https://arxiv.org/abs/2203.02155">2203.02155</a>，Ouyang et al. 2022，OpenAI）<br>
 <code class="recipe">sft → rm → ppo -&gt; 对齐人类意图 [人类偏好奖励模型]</code><br>
-<span class="idea"><span class="p">问题</span> 语言模型没对齐用户意图；<span class="p">方法</span> 三段式：SFT → 训奖励模型（人类偏好排序）→ PPO 优化；<span class="p">核心</span> 确立「RLHF」范式，ChatGPT 的底座。</span></p>
+<span class="idea"><span class="p">问题</span> 语言模型没对齐用户意图；<span class="p">方法</span> 三段式：SFT → 训奖励模型（人类偏好排序）→ PPO 优化；<span class="p">核心</span> 确立「RLHF」范式，ChatGPT 的底座；后续 DPO 指出单独训奖励模型 + RL 麻烦且不稳，把奖励隐式化——RLHF 的「奖励模型」组件被多数方法绕开，范式本身被 DPO / RLVR 替代。</span></p>
 
 <p class="paper"><b>DPO（Direct Preference Optimization）</b>（<a href="https://arxiv.org/abs/2305.18290">2305.18290</a>，Rafailov et al. 2023）<br>
 <code class="recipe">dpo -&gt; 免奖励模型对齐 [隐式奖励 = $\beta\cdot\log(\pi/\pi_{\mathrm{ref}})$]</code><br>
-<span class="idea"><span class="p">问题</span> RLHF 要单独训奖励模型、再 RL，麻烦且不稳；<span class="p">方法</span> 把奖励模型「隐式化」成 $\beta\cdot\log(\pi/\pi_{\mathrm{ref}})$，直接从偏好对做分类式优化；<span class="p">核心</span> 免奖励模型、免 RL 的对齐范式，是后续自奖励/偏好优化一系列工作的底座。</span></p>
+<span class="idea"><span class="p">问题</span> RLHF 要单独训奖励模型、再 RL，麻烦且不稳；<span class="p">方法</span> 把奖励模型「隐式化」成 $\beta\cdot\log(\pi/\pi_{\mathrm{ref}})$，直接从偏好对做分类式优化；<span class="p">核心</span> 免奖励模型、免 RL 的对齐范式，是后续自奖励/偏好优化一系列工作的底座；后续 RLVR / on-policy 蒸馏指出静态偏好对在可验证、长 CoT 场景不适用，改成用 rollout 奖励——DPO 的隐式奖励思想被保留，静态偏好对被部分弃。</span></p>
 
 <p class="paper"><b>RLOO（REINFORCE Leave-One-Out）</b>（<a href="https://arxiv.org/abs/2402.14740">2402.14740</a>，Ahmadian et al. 2024）<br>
 <code class="recipe">pg(leave-one-out) -&gt; 免价值模型 [同组其余样本当 baseline]</code><br>
-<span class="idea"><span class="p">问题</span> 一定要价值模型吗；<span class="p">方法</span> 用「组内其余样本的均值」当 baseline，做 REINFORCE，无价值模型、无偏；<span class="p">核心</span> 证明 critic-free 也能追平 PPO，是 GRPO 的直接前奏（TRL 已实现）。</span></p>
+<span class="idea"><span class="p">问题</span> 一定要价值模型吗；<span class="p">方法</span> 用「组内其余样本的均值」当 baseline，做 REINFORCE，无价值模型、无偏；<span class="p">核心</span> 证明 critic-free 也能追平 PPO，是 GRPO 的直接前奏（TRL 已实现）；后续 GRPO 指出 leave-one-out baseline 不如组内标准化 advantage 稳，改成按 prompt 组内均值/标准差归一——RLOO 的 critic-free 思想被继承、baseline 被改。</span></p>
 
 <h2>4. GRPO 这条线（critic-free 的主流）</h2>
 <p class="trend">GRPO 用「同 prompt 采一组、组内标准化 advantage」彻底甩掉价值模型，配可验证奖励，成为 DeepSeek-R1 的引擎。之后的 DAPO/GSPO/GEPO 都在修它：clip 不对称、长度偏置、序列级 credit、熵控制。这节是当前 LLM RL 的主干，绝大多数已进 verl/TRL。</p>

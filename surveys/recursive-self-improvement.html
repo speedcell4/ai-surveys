@@ -94,19 +94,19 @@ window.MathJax = {
 
 <p class="paper"><b>Self-Instruct</b>（<a href="https://arxiv.org/abs/2212.10560">2212.10560</a>，Wang et al. 2022）<br>
 <code class="recipe">self-train(指令) -&gt; 指令跟随 [自生成 + 自过滤]</code><br>
-<span class="idea"><span class="p">问题</span> 指令微调依赖人工标注、贵且有限；<span class="p">方法</span> 让模型自己生成「指令 + 输出」，过滤后微调自己，循环 bootstrap；<span class="p">核心</span> 自训练开山，GPT-4 级别的指令跟随就是从这来的。</span></p>
+<span class="idea"><span class="p">问题</span> 指令微调依赖人工标注、贵且有限；<span class="p">方法</span> 让模型自己生成「指令 + 输出」，过滤后微调自己，循环 bootstrap；<span class="p">核心</span> 自训练开山，GPT-4 级别的指令跟随就是从这来的；后续 LMSI / ReST 指出自生成标签质量不稳、需奖励 / 置信度过滤——Self-Instruct 的「自生成 + 过滤」骨架被继承、过滤器被换。</span></p>
 
 <p class="paper"><b>STaR（Self-Taught Reasoner）</b>（<a href="https://arxiv.org/abs/2203.14465">2203.14465</a>，Zelikman et al. 2022）<br>
 <code class="recipe">self-train(推理) -&gt; 学会推理 [答对才留 rationale]</code><br>
-<span class="idea"><span class="p">问题</span> 没有推理链标注怎么学会推理；<span class="p">方法</span> 让模型生成 rationale，只保留「得到正确答案」的，再用它微调自己、迭代；<span class="p">核心</span> 用「答案对不对」当过滤器 bootstrap 推理能力，是 R1 之前自我推理的雏形。</span></p>
+<span class="idea"><span class="p">问题</span> 没有推理链标注怎么学会推理；<span class="p">方法</span> 让模型生成 rationale，只保留「得到正确答案」的，再用它微调自己、迭代；<span class="p">核心</span> 用「答案对不对」当过滤器 bootstrap 推理能力，是 R1 之前自我推理的雏形；后续 Quiet-STaR / R1 把 rationale 变成内部思考 + RL 信号——STaR 的「答对才留」过滤思想被继承。</span></p>
 
 <p class="paper"><b>ReST（Reinforced Self-Training）</b>（<a href="https://arxiv.org/abs/2308.08998">2308.08998</a>，Gulcehre et al. 2023）<br>
 <code class="recipe">self-train(奖励过滤) -&gt; 迭代提升 [采样 → 奖励过滤 → 微调]</code><br>
-<span class="idea"><span class="p">问题</span> 自训练怎么把「奖励信号」和「数据生成」结合；<span class="p">方法</span> 从当前策略采样，用奖励函数过滤高分样本，再 SFT，循环；<span class="p">核心</span> 把自训练变成「采样-过滤-微调」的通用循环，是很多 RL 后训练的骨架。</span></p>
+<span class="idea"><span class="p">问题</span> 自训练怎么把「奖励信号」和「数据生成」结合；<span class="p">方法</span> 从当前策略采样，用奖励函数过滤高分样本，再 SFT，循环；<span class="p">核心</span> 把自训练变成「采样-过滤-微调」的通用循环，是很多 RL 后训练的骨架；后续 R1 / GRPO 指出「过滤再 SFT」离策略、利用率低，改成在线 RL——ReST 的循环骨架被继承、离线过滤被改。</span></p>
 
 <p class="paper"><b>LMSI（LLMs Can Self-Improve）</b>（<a href="https://arxiv.org/abs/2210.11610">2210.11610</a>，Huang et al. 2022）<br>
 <code class="recipe">self-train(自标签) -&gt; 无监督提升 [自生成标签 + 置信度筛选]</code><br>
-<span class="idea"><span class="p">问题</span> 没有外部标签时 LLM 能不能自我提升；<span class="p">方法</span> 用模型自生成的标签（如推理/蕴含判断）+ 置信度筛选再训练；<span class="p">核心</span> 最早系统论证「LLM 能靠自己的标签提升」，是 self-training 概念的实证起点。</span></p>
+<span class="idea"><span class="p">问题</span> 没有外部标签时 LLM 能不能自我提升；<span class="p">方法</span> 用模型自生成的标签（如推理/蕴含判断）+ 置信度筛选再训练；<span class="p">核心</span> 最早系统论证「LLM 能靠自己的标签提升」，是 self-training 概念的实证起点；后续工作指出纯自标签有偏、需要外部奖励或更强过滤，LMSI 的「无外部标签」路线后来大多被 RLVR / on-policy 蒸馏替代。</span></p>
 
 <p class="paper"><b>Quiet-STaR</b>（<a href="https://arxiv.org/abs/2403.09629">2403.09629</a>，Zelikman et al. 2024）<br>
 <code class="recipe">self-train(思考) -&gt; 每个 token 前先想 [内部 rationale + REINFORCE]</code><br>
@@ -118,7 +118,7 @@ window.MathJax = {
 <div class="deep">
 <p class="paper"><b>Self-Rewarding Language Models</b>（<a href="https://arxiv.org/abs/2401.10020">2401.10020</a>，Yuan et al. 2024，Meta）<br>
 <code class="recipe">self-reward -&gt; 生成 + 裁判二合一 [LLM-as-judge 迭代]</code><br>
-<span class="idea"><span class="p">问题</span> RLHF 卡在「人类偏好数据有限、还跟不上模型变强」；<span class="p">方法</span> 让同一个模型既生成候选、又当裁判打分，用自判偏好做 DPO 微调，下一轮更强、裁判也更准；<span class="p">核心</span> 开「自奖励」一派，证明模型能靠自判迭代提升，但也埋下「裁判偏见」的雷。</span></p>
+<span class="idea"><span class="p">问题</span> RLHF 卡在「人类偏好数据有限、还跟不上模型变强」；<span class="p">方法</span> 让同一个模型既生成候选、又当裁判打分，用自判偏好做 DPO 微调，下一轮更强、裁判也更准；<span class="p">核心</span> 开「自奖励」一派，证明模型能靠自判迭代提升，但也埋下「裁判偏见」的雷；后续 Meta-Rewarding 指出裁判自己会偏，加一层元裁判纠偏——self-reward 路线被修正而非放弃。</span></p>
 </div>
 
 <div class="deep">
@@ -156,7 +156,7 @@ window.MathJax = {
 
 <p class="paper"><b>Self-Refine（Iterative Refinement with Self-Feedback）</b>（<a href="https://arxiv.org/abs/2303.17651">2303.17651</a>，Madaan et al. 2023）<br>
 <code class="recipe">self-correct -&gt; 免训练迭代精修 [生成 → 自反馈 → 精修]</code><br>
-<span class="idea"><span class="p">问题</span> 生成质量能不能靠「自己给自己反馈」提上去，而不改模型；<span class="p">方法</span> 同一个模型生成、给自己反馈、再精修，循环；<span class="p">核心</span> 免训练的自我精修，多任务上比一次性生成更好。</span></p>
+<span class="idea"><span class="p">问题</span> 生成质量能不能靠「自己给自己反馈」提上去，而不改模型；<span class="p">方法</span> 同一个模型生成、给自己反馈、再精修，循环；<span class="p">核心</span> 免训练的自我精修，多任务上比一次性生成更好；后续 Cannot Self-Correct 指出没有外部反馈时自纠正会退化，SCoRe 又用 RL 把它训练成真能力——免训练自纠正这条线被弃，改走专门训练。</span></p>
 
 <p class="paper"><b>Reflexion（Verbal Reinforcement Learning）</b>（<a href="https://arxiv.org/abs/2303.11366">2303.11366</a>，Shinn et al. 2023）<br>
 <code class="recipe">self-correct + 记忆 -&gt; 从失败学 [口头反思 + 记忆重试]</code><br>

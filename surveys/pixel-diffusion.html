@@ -82,19 +82,19 @@ window.MathJax = {
 <div class="deep">
 <p class="paper"><b>DDPM</b>（<a href="https://arxiv.org/abs/2006.11239">2006.11239</a>）<br>
 <code class="recipe">diffuse(patch + noise) -&gt; $\varepsilon$-pred + $\varepsilon$-loss</code><br>
-<span class="idea"><span class="p">问题</span> GAN 训练不稳、易模式崩塌；<span class="p">方法</span> 把生成改成「逐步加噪→逐步去噪」，网络直接预测噪声；<span class="p">核心</span> 把难的「一步生成」拆成很多步简单的「去噪」。</span></p>
+<span class="idea"><span class="p">问题</span> GAN 训练不稳、易模式崩塌；<span class="p">方法</span> 把生成改成「逐步加噪→逐步去噪」，网络直接预测噪声；<span class="p">核心</span> 把难的「一步生成」拆成很多步简单的「去噪」；后续 DDIM / EDM 指出 1000 步马尔可夫采样太慢、随机游走低效，改成少步确定性与更优噪声调度——扩散线没被放弃，而是被 score SDE / flow matching 继承。</span></p>
 </div>
 
 <div class="deep">
 <p class="paper"><b>LDM / Stable Diffusion</b>（<a href="https://arxiv.org/abs/2112.10752">2112.10752</a>）<br>
 <code class="recipe">diffuse(vae(patch) + noise) -&gt; $\varepsilon$-pred + $\varepsilon$-loss</code><br>
-<span class="idea"><span class="p">问题</span> 像素空间去噪每步都跑全分辨率、太贵；<span class="p">方法</span> 先用 VAE 压到潜空间再扩散；<span class="p">核心</span> VAE 有损、且「重建」与「生成」目标错位——正是后来「回归像素」要解决的痛点。</span></p>
+<span class="idea"><span class="p">问题</span> 像素空间去噪每步都跑全分辨率、太贵；<span class="p">方法</span> 先用 VAE 压到潜空间再扩散；<span class="p">核心</span> VAE 有损、且「重建」与「生成」目标错位——正是后来「回归像素」要解决的痛点；后续像素 flow / Tuna-R 把「去 VAE、回归像素」做成主线，latent diffusion 作为保守派仍保留。</span></p>
 </div>
 
 <div class="deep">
 <p class="paper"><b>DiT</b>（<a href="https://arxiv.org/abs/2212.09748">2212.09748</a>）<br>
 <code class="recipe">diffuse(vae(patch) + noise) -&gt; $\varepsilon$-pred + $\varepsilon$-loss（U-Net → ViT）</code><br>
-<span class="idea"><span class="p">问题</span> U-Net 难随参数规模扩展；<span class="p">方法</span> 用 ViT 替换 U-Net 做扩散骨干；<span class="p">核心</span> 这是后来所有 pDiT 的架构底座。</span></p>
+<span class="idea"><span class="p">问题</span> U-Net 难随参数规模扩展；<span class="p">方法</span> 用 ViT 替换 U-Net 做扩散骨干；<span class="p">核心</span> 这是后来所有 pDiT 的架构底座；后续 U-ViT / PixelU 指出纯 ViT 易丢细节，补 U 形跳跃连接——DiT 本身没被放弃，被继承为 pDiT 的默认骨干。</span></p>
 </div>
 
 <p class="paper"><b>U-ViT</b>（<a href="https://arxiv.org/abs/2209.12152">2209.12152</a>）<br>
@@ -123,18 +123,18 @@ window.MathJax = {
 
 <p class="paper"><b>Score-Based Generative Modeling through SDEs</b>（<a href="https://arxiv.org/abs/2011.13456">2011.13456</a>）<br>
 <code class="recipe">diffuse(A + noise) -&gt; score-pred + score-loss（SDE 统一）</code><br>
-<span class="idea"><span class="p">问题</span> 扩散与 score matching 各自为战；<span class="p">方法</span> 用随机微分方程（SDE）统一 DDPM 与 score matching；<span class="p">核心</span> score-based 生成的理论统一，是 `diffuse(...)` 记号的源头。</span></p>
+<span class="idea"><span class="p">问题</span> 扩散与 score matching 各自为战；<span class="p">方法</span> 用随机微分方程（SDE）统一 DDPM 与 score matching；<span class="p">核心</span> score-based 生成的理论统一，是 `diffuse(...)` 记号的源头；后续 flow matching / stochastic interpolants 指出 SDE 采样路径绕、步数多，改走直线 ODE——理论被统一继承而非放弃。</span></p>
 
 <div class="deep">
 <p class="paper"><b>Flow Matching</b>（<a href="https://arxiv.org/abs/2210.02747">2210.02747</a>）<br>
 <code class="recipe">flow(A + noise) -&gt; v-pred + flow-loss（条件概率路径）</code><br>
-<span class="idea"><span class="p">问题</span> 连续流训练难、扩散要复杂调度；<span class="p">方法</span> 在噪声-数据点对间定义简单条件概率路径、直接回归速度场 v；<span class="p">核心</span> 把生成变成「学速度场」，是本综述所有 `flow(...)` 记号的范式源头。</span></p>
+<span class="idea"><span class="p">问题</span> 连续流训练难、扩散要复杂调度；<span class="p">方法</span> 在噪声-数据点对间定义简单条件概率路径、直接回归速度场 v；<span class="p">核心</span> 把生成变成「学速度场」，是本综述所有 `flow(...)` 记号的范式源头；后续 Rectified Flow 指出 naive 条件路径会交叉、采样绕，用 reflow 拉直——这条线被继承为 rectified flow。</span></p>
 </div>
 
 <div class="deep">
 <p class="paper"><b>Rectified Flow</b>（<a href="https://arxiv.org/abs/2209.03003">2209.03003</a>）<br>
 <code class="recipe">flow(A + noise) -&gt; v-pred + rectified flow-loss（直线路径 + reflow）</code><br>
-<span class="idea"><span class="p">问题</span> 流路径弯曲、采样步数多；<span class="p">方法</span> 用直线路径连接噪声与数据、反复「拉直」（reflow）；<span class="p">核心</span> 直线流让采样更少步、更稳。</span></p>
+<span class="idea"><span class="p">问题</span> 流路径弯曲、采样步数多；<span class="p">方法</span> 用直线路径连接噪声与数据、反复「拉直」（reflow）；<span class="p">核心</span> 直线流让采样更少步、更稳；后续 SD3 证明 reflow 不是上规模的必需项，直接 scaling rectified flow 即可，这条线被继承为 rectified flow + MMDiT。</span></p>
 </div>
 
 <p class="paper"><b>Stochastic Interpolants</b>（<a href="https://arxiv.org/abs/2303.08797">2303.08797</a>）<br>
@@ -147,7 +147,7 @@ window.MathJax = {
 
 <p class="paper"><b>Consistency Models</b>（<a href="https://arxiv.org/abs/2303.01469">2303.01469</a>）<br>
 <code class="recipe">consistency(A + noise) -&gt; consistency-pred + consistency-loss</code><br>
-<span class="idea"><span class="p">问题</span> 多步采样慢；<span class="p">方法</span> 学「任意噪声直接映射到干净图」的一致性映射、可一步生成；<span class="p">核心</span> 一致性损失 = 本综述 EPG/CrossFlow 里 consistency-loss 的源头。</span></p>
+<span class="idea"><span class="p">问题</span> 多步采样慢；<span class="p">方法</span> 学「任意噪声直接映射到干净图」的一致性映射、可一步生成；<span class="p">核心</span> 一致性损失 = 本综述 EPG/CrossFlow 里 consistency-loss 的源头；后续 LCM / EPG 指出初版训练不稳、少步质量与扩散仍有差距，改为 latent consistency 或像素空间两阶段训练——一致性路线被继承而非放弃。</span></p>
 
 <p class="paper"><b>SiT（Scalable Interpolant Transformers）</b>（<a href="https://arxiv.org/abs/2401.08740">2401.08740</a>）<br>
 <code class="recipe">flow(A + noise) -&gt; v-pred + v-loss（interpolant Transformer）</code><br>
@@ -327,14 +327,14 @@ window.MathJax = {
 <p class="trend">与扩散并行的是自回归（像 LLM 一样逐 token 生成）。早期用离散 token（VQ），后来连续 token、再到与扩散合流，两条路线在「像素 token」上汇合。</p>
 <p class="paper"><b>VQGAN（Taming Transformers）</b>（<a href="https://arxiv.org/abs/2012.09841">2012.09841</a>）<br>
 <code class="recipe">ar(vq(patch)) -&gt; ce(h_t, x_{t+1}) [h_t = 位置 t 的 codebook logits；x_{t+1} = 下一真实 VQ code index]（VQ 离散化）</code><br>
-<span class="idea"><span class="p">问题</span> 图像生成缺好用的离散 token；<span class="p">方法</span> VQ-VAE 学离散 codebook + transformer 建模；<span class="p">核心</span> 离散视觉 token 的源头，LlamaGen/VAR 的底座。</span></p>
+<span class="idea"><span class="p">问题</span> 图像生成缺好用的离散 token；<span class="p">方法</span> VQ-VAE 学离散 codebook + transformer 建模；<span class="p">核心</span> 离散视觉 token 的源头，LlamaGen/VAR 的底座；后续 LlamaGen/VAR 继承离散 token，但 MAR 指出量化损失、表达受限，改走连续 token——「离散 AR」这条线被 MAR 部分放弃。</span></p>
 
 <p class="paper"><b>LlamaGen</b>（<a href="https://arxiv.org/abs/2406.06525">2406.06525</a>）<br>
 <code class="recipe">ar(vq(patch)) -&gt; ce(h_t, x_{t+1}) [h_t = codebook logits；x_{t+1} = 下一真实 VQ code index]</code><br>
-<span class="idea"><span class="p">问题</span> AR 路线能不能做出 SOTA 图像生成（当时被扩散压着）；<span class="p">方法</span> 把 LLM 的 vanilla next-token prediction 直接搬到 VQ token 上；<span class="p">核心</span> 证明「普通 AR 也能打」，拉开视觉 AR 的序幕。</span></p>
+<span class="idea"><span class="p">问题</span> AR 路线能不能做出 SOTA 图像生成（当时被扩散压着）；<span class="p">方法</span> 把 LLM 的 vanilla next-token prediction 直接搬到 VQ token 上；<span class="p">核心</span> 证明「普通 AR 也能打」，拉开视觉 AR 的序幕；后续 VAR 指出光栅序违反图像层级、生成慢，改 next-scale，MAR 又放弃 VQ 走连续 token。</span></p>
 <p class="paper"><b>VAR</b>（<a href="https://arxiv.org/abs/2404.02905">2404.02905</a>）<br>
 <code class="recipe">ar(vq 多尺度) -&gt; ce(h_r, x_r) [h_r = scale r 的 codebook logits；x_r = scale r 的真实 token map]</code><br>
-<span class="idea"><span class="p">问题</span> 逐 token（光栅序）生成又慢又违反图像的层级结构；<span class="p">方法</span> 多尺度 VQ + 从粗到细逐尺度预测；<span class="p">核心</span> next-scale 取代 next-token。</span></p>
+<span class="idea"><span class="p">问题</span> 逐 token（光栅序）生成又慢又违反图像的层级结构；<span class="p">方法</span> 多尺度 VQ + 从粗到细逐尺度预测；<span class="p">核心</span> next-scale 取代 next-token；后续 MAR / Fluid 指出多尺度离散仍量化有损、scale 受限，转连续 token——next-scale 思想被 Fractal 继承，但离散化被弃。</span></p>
 <p class="paper"><b>MAR</b>（<a href="https://arxiv.org/abs/2406.11838">2406.11838</a>）<br>
 <code class="recipe">ar(mask patch) -&gt; mse(去噪头输出, 扩散目标)（去噪 MSE 作逐 token 似然代理）</code><br>
 <span class="idea"><span class="p">问题</span> VQ 离散化有量化损失、表达受限；<span class="p">方法</span> 丢掉 VQ，用掩码自回归 + 去噪 MSE（diffusion-loss）作为逐 token 似然代理来建模连续 token；<span class="p">核心</span> AR 不一定要离散 token。</span></p>

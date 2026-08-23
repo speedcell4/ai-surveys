@@ -77,13 +77,13 @@ window.MathJax = {
 <div class="deep">
 <p class="paper"><b>CCM：A Constituent-Context Model（Klein &amp; Manning 2002）</b>（<a href="https://aclanthology.org/P02-1017/">ACL 2002</a>）<br>
 <code class="recipe">pcfg(sentence) -&gt; 成分树 + MLE（EM + split/merge）</code><br>
-<span class="idea"><span class="p">问题</span> 朴素 PCFG 的 EM 学出的规则太「平均」、树质量差；<span class="p">方法</span> 给每个成分加「上下文」特征，再用 split/merge 自动扩展文法；<span class="p">核心</span> 上下文特征 + 文法分裂合并，是无监督成分解析早期最强 baseline。</span></p>
+<span class="idea"><span class="p">问题</span> 朴素 PCFG 的 EM 学出的规则太「平均」、树质量差；<span class="p">方法</span> 给每个成分加「上下文」特征，再用 split/merge 自动扩展文法；<span class="p">核心</span> 上下文特征 + 文法分裂合并，是无监督成分解析早期最强 baseline；后续 compound / neural PCFG 在 F1 上超过它，经典 CCM 的 EM+特征线基本被弃，但「上下文特征」思想被神经化继承。</span></p>
 </div>
 
 <div class="deep">
 <p class="paper"><b>DMV（Klein &amp; Manning 2004）</b>（<a href="https://aclanthology.org/P04-1061/">ACL 2004</a>）<br>
 <code class="recipe">dmv(pos-seq) -&gt; 依存树 + MLE（EM）</code><br>
-<span class="idea"><span class="p">问题</span> 没有标注树怎么学依存；<span class="p">方法</span> head-outward 生成模型：每个词先选中心词、再向左右生成依存词，配价限制数量；<span class="p">核心</span> 「依存 + 配价」模型成为之后十几年无监督依存解析的 baseline。</span></p>
+<span class="idea"><span class="p">问题</span> 没有标注树怎么学依存；<span class="p">方法</span> head-outward 生成模型：每个词先选中心词、再向左右生成依存词，配价限制数量；<span class="p">核心</span> 「依存 + 配价」模型成为之后十几年无监督依存解析的 baseline；后续在线 EM / 后验正则 / 神经 DMV 不断修它的局部最优与稀疏性，DMV 的 head-outward 结构被保留、经典 EM 线被神经化替代。</span></p>
 </div>
 
 <p class="paper"><b>Variational Bayesian Grammar Induction（Kurihara &amp; Sato 2006）</b>（ICGI 2006）<br>
@@ -96,11 +96,11 @@ window.MathJax = {
 
 <p class="paper"><b>Contrastive Estimation（Smith &amp; Eisner 2005）</b>（<a href="https://aclanthology.org/P05-1044/">ACL 2005</a>）<br>
 <code class="recipe">loglinear(sentence) -&gt; 文法 + 对比估计（CE）</code><br>
-<span class="idea"><span class="p">问题</span> 无标注下 MLE 的配分函数难算、模型易退化；<span class="p">方法</span> 把「真样本的邻域/噪声样本」当隐式负例、真样本当正例做对比；<span class="p">核心</span> 对比估计 = 无监督判别式训练 log-linear 文法。</span></p>
+<span class="idea"><span class="p">问题</span> 无标注下 MLE 的配分函数难算、模型易退化；<span class="p">方法</span> 把「真样本的邻域/噪声样本」当隐式负例、真样本当正例做对比；<span class="p">核心</span> 对比估计 = 无监督判别式训练 log-linear 文法；后续 Painless / 特征化 CCM 继承 CE 思想，再后来被神经对比目标取代——「噪声样本当负例」的思想被保留、经典 log-linear 线被弃。</span></p>
 
 <p class="paper"><b>Online EM for Unsupervised Models（Liang &amp; Klein 2009）</b>（<a href="https://aclanthology.org/N09-1069/">NAACL 2009</a>）<br>
 <code class="recipe">dmv(pos-seq) -&gt; 依存树 + online EM</code><br>
-<span class="idea"><span class="p">问题</span> 批量 EM 慢且易过拟合；<span class="p">方法</span> 逐句更新 + 新旧统计量插值（步长随迭代衰减）；<span class="p">核心</span> 在线 EM 让 DMV 更快更稳、F1 明显提升。</span></p>
+<span class="idea"><span class="p">问题</span> 批量 EM 慢且易过拟合；<span class="p">方法</span> 逐句更新 + 新旧统计量插值（步长随迭代衰减）；<span class="p">核心</span> 在线 EM 让 DMV 更快更稳、F1 明显提升；后续 Baby Steps 指出它仍会陷进坏局部最优，加短句起步课程——online EM 的插值步长被保留、初始化被改。</span></p>
 
 <p class="paper"><b>Probabilistic CFG with Latent Annotations（Matsuzaki, Miyao &amp; Tsujii 2005）</b>（<a href="https://aclanthology.org/P05-1010/">ACL 2005</a>）<br>
 <code class="recipe">latent-pcfg(sentence) -&gt; 成分树 + MLE（EM，隐标注）</code><br>
@@ -135,7 +135,7 @@ window.MathJax = {
 
 <p class="paper"><b>From Baby Steps to Leapfrog（Spitkovsky et al. 2010）</b>（<a href="https://aclanthology.org/N10-1116/">NAACL 2010</a>）<br>
 <code class="recipe">dmv(pos-seq) -&gt; 依存树 + Viterbi EM（课程：短句→长句）</code><br>
-<span class="idea"><span class="p">问题</span> EM 直接在长句上初始化会陷进坏局部最优；<span class="p">方法</span> 「少即是多」——从长度=1 的句子开始逐步加长、Viterbi EM 热启动；<span class="p">核心</span> 课程学习/短句起步让无监督依存 F1 大幅跃升。</span></p>
+<span class="idea"><span class="p">问题</span> EM 直接在长句上初始化会陷进坏局部最优；<span class="p">方法</span> 「少即是多」——从长度=1 的句子开始逐步加长、Viterbi EM 热启动；<span class="p">核心</span> 课程学习/短句起步让无监督依存 F1 大幅跃升；后续 Breaking Out of Local Optima 指出只靠初始化还不够，再加计数变换/模型重组——短句起步的课程思想被保留。</span></p>
 
 <p class="paper"><b>Unambiguity Regularization（Tu &amp; Honavar 2012）</b>（<a href="https://aclanthology.org/D12-1121/">EMNLP 2012</a>）<br>
 <code class="recipe">spectral-pcfg(sentence) -&gt; 文法 + 无歧义正则</code><br>
@@ -143,7 +143,7 @@ window.MathJax = {
 
 <p class="paper"><b>Spectral Learning of Latent-Variable PCFGs（Cohen et al. 2012）</b>（<a href="https://aclanthology.org/P12-1024/">ACL 2012</a>）<br>
 <code class="recipe">spectral(sentence) -&gt; 潜文法 + SVD（矩匹配）</code><br>
-<span class="idea"><span class="p">问题</span> EM 只有局部最优、无一致性保证；<span class="p">方法</span> 把可观测的 inside/outside 矩量做 SVD，在「分离性」条件下恢复潜规则参数、有相合性证明；<span class="p">核心</span> 谱方法 = 全局最优、可证明一致的文法估计。</span></p>
+<span class="idea"><span class="p">问题</span> EM 只有局部最优、无一致性保证；<span class="p">方法</span> 把可观测的 inside/outside 矩量做 SVD，在「分离性」条件下恢复潜规则参数、有相合性证明；<span class="p">核心</span> 谱方法 = 全局最优、可证明一致的文法估计；后续工程版指出负概率、平滑难调、真实文本上仅接近 EM，神经化 compound PCFG 取代谱方法——「全局最优 + 一致性」的理论遗产被保留。</span></p>
 
 <p class="paper"><b>Experiments with Spectral L-PCFGs（Cohen et al. 2013）</b>（<a href="https://aclanthology.org/N13-1015/">NAACL 2013</a>）<br>
 <code class="recipe">spectral(sentence) -&gt; 潜文法 + SVD（真实文本工程化）</code><br>

@@ -68,19 +68,19 @@ window.MathJax = {
 
 <p class="paper"><b>Sparse Transformer</b>（<a href="https://arxiv.org/abs/1904.10509">1904.10509</a>，Child et al. 2019）<br>
 <code class="recipe">sparse(fixed) -&gt; $O(n\sqrt{n})$ [strided + fixed 两种固定模式]</code><br>
-<span class="idea"><span class="p">问题</span> 注意力时间/显存随长度平方涨；<span class="p">方法</span> 把注意力矩阵分解成 strided（跨步）和 fixed（固定局部）两种稀疏模式；<span class="p">核心</span> 稀疏注意力开山，复杂度 $O(n\sqrt{n})$。</span></p>
+<span class="idea"><span class="p">问题</span> 注意力时间/显存随长度平方涨；<span class="p">方法</span> 把注意力矩阵分解成 strided（跨步）和 fixed（固定局部）两种稀疏模式；<span class="p">核心</span> 稀疏注意力开山，复杂度 $O(n\sqrt{n})$；后续 Longformer / BigBird 指出固定模式不通用、质量有损，NSA 改成原生可训练动态选择——稀疏线被继承、固定模式被改。</span></p>
 
 <p class="paper"><b>Reformer</b>（<a href="https://arxiv.org/abs/2001.04451">2001.04451</a>，Kitaev et al. 2020）<br>
 <code class="recipe">sparse(LSH) -&gt; $O(n \log n)$ [局部敏感哈希 + 可逆残差]</code><br>
-<span class="idea"><span class="p">问题</span> 全注意力算不动、还要存激活；<span class="p">方法</span> 用局部敏感哈希只让相似 token 互相注意，配可逆残差省激活内存；<span class="p">核心</span> 哈希近似注意力路线。</span></p>
+<span class="idea"><span class="p">问题</span> 全注意力算不动、还要存激活；<span class="p">方法</span> 用局部敏感哈希只让相似 token 互相注意，配可逆残差省激活内存；<span class="p">核心</span> 哈希近似注意力路线；后续指出 LSH 有近似误差、实现复杂，主流未沿用，这条线基本被弃。</span></p>
 
 <p class="paper"><b>Longformer</b>（<a href="https://arxiv.org/abs/2004.05150">2004.05150</a>，Beltagy et al. 2020）<br>
 <code class="recipe">sparse(滑窗+全局+膨胀) -&gt; $O(n)$ [三种模式组合]</code><br>
-<span class="idea"><span class="p">问题</span> 长文档放不进全注意力；<span class="p">方法</span> 组合滑窗、任务相关全局 token、膨胀窗口；<span class="p">核心</span> $O(n)$ 复杂度，长文档 NLP 常用底座。</span></p>
+<span class="idea"><span class="p">问题</span> 长文档放不进全注意力；<span class="p">方法</span> 组合滑窗、任务相关全局 token、膨胀窗口；<span class="p">核心</span> $O(n)$ 复杂度，长文档 NLP 常用底座；后续 NSA 指出固定稀疏不通用、选择该可训练，把稀疏改成原生可训练 + 硬件对齐——滑窗/全局思想被继承。</span></p>
 
 <p class="paper"><b>BigBird</b>（<a href="https://arxiv.org/abs/2007.14062">2007.14062</a>，Zaheer et al. 2020）<br>
 <code class="recipe">sparse(随机+滑窗+全局) -&gt; $O(n)$ [随机图 + 理论保证]</code><br>
-<span class="idea"><span class="p">问题</span> 稀疏注意力凭什么能替代全注意力；<span class="p">方法</span> 随机、滑窗、全局三类边的稀疏图，给出图灵完备性理论；<span class="p">核心</span> 既省算力又带理论保证。</span></p>
+<span class="idea"><span class="p">问题</span> 稀疏注意力凭什么能替代全注意力；<span class="p">方法</span> 随机、滑窗、全局三类边的稀疏图，给出图灵完备性理论；<span class="p">核心</span> 既省算力又带理论保证；后续 NSA / DSA 指出随机图模式不如动态选择，改成按分数选 token / block——理论保证被保留、固定随机模式被改。</span></p>
 
 <h2>3. DeepSeek 稀疏注意力谱系（NSA → DSA → CSA + HCA）</h2>
 <p class="trend">这是「选 block 还是选 token」最清晰的一条演进线：NSA 把稀疏做成<b>原生可训练 + 硬件对齐</b>，选择粒度是 <b>block</b>；DSA 用「闪电索引器」把粒度细化到 <b>token</b>；V4 的 CSA / HCA 反过来先<b>块压缩</b> KV，再在压缩条目上选择或直接密集，把 1M token 的成本砍到 V3.2 的约 1/10。</p>

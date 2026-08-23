@@ -89,27 +89,27 @@ window.MathJax = {
 
 <p class="paper"><b>Linear Attention（Transformers are RNNs）</b>（<a href="https://arxiv.org/abs/2006.16236">2006.16236</a>，Katharopoulos et al. 2020）<br>
 <code class="recipe">linear(kernel) -&gt; $O(n)$ 训练 + $O(1)$ 推理内存 [$S = S + k\cdot v^{\top}$]</code><br>
-<span class="idea"><span class="p">问题</span> 自注意力 $O(n^2)$ 算不起长序列；<span class="p">方法</span> 把 softmax 换成核函数，注意力变成「矩阵 state 的线性递归」，训练可并行、推理是 RNN；<span class="p">核心</span> 线性注意力的开山，确立了「state 压缩」这条路。</span></p>
+<span class="idea"><span class="p">问题</span> 自注意力 $O(n^2)$ 算不起长序列；<span class="p">方法</span> 把 softmax 换成核函数，注意力变成「矩阵 state 的线性递归」，训练可并行、推理是 RNN；<span class="p">核心</span> 线性注意力的开山，确立了「state 压缩」这条路；后续 RetNet / GLA 指出纯加性 state 没有衰减、recall 差，DeltaNet 又把它改成可编辑记忆——路线没被放弃，而是靠 delta 规则一步步修 recall。</span></p>
 
 <p class="paper"><b>Performer（Rethinking Attention with Performers）</b>（<a href="https://arxiv.org/abs/2009.14794">2009.14794</a>，Choromanski et al. 2021）<br>
 <code class="recipe">linear(random feature) -&gt; $O(n)$ [用随机特征近似 softmax 核]</code><br>
-<span class="idea"><span class="p">问题</span> 核化线性注意力怎么逼近 softmax、又不显式算注意力矩阵；<span class="p">方法</span> 用正随机特征（FAVOR+）近似 softmax 核；<span class="p">核心</span> 证明 softmax 注意力也能被线性化近似，理论完备。</span></p>
+<span class="idea"><span class="p">问题</span> 核化线性注意力怎么逼近 softmax、又不显式算注意力矩阵；<span class="p">方法</span> 用正随机特征（FAVOR+）近似 softmax 核；<span class="p">核心</span> 证明 softmax 注意力也能被线性化近似，理论完备；后续工作指出随机特征近似误差大、精确 recall 不如 softmax，工业里很少单独使用，这条线基本被门控 / 数据依赖 / delta 线取代。</span></p>
 
 <p class="paper"><b>RetNet（Retentive Network）</b>（<a href="https://arxiv.org/abs/2307.08621">2307.08621</a>，Sun et al. 2023）<br>
 <code class="recipe">linear(衰减 retention) -&gt; 训练并行 + $O(1)$ 推理 [$S = \gamma S + k\cdot v^{\top}$]</code><br>
-<span class="idea"><span class="p">问题</span> 线性注意力缺「距离衰减」，远 token 和近 token 一视同仁；<span class="p">方法</span> 给 state 加指数衰减 $\gamma$，支持并行/递归/分块三种等价计算；<span class="p">核心</span> 把「衰减」引入线性注意力，LLM 级可扩展的早期代表。</span></p>
+<span class="idea"><span class="p">问题</span> 线性注意力缺「距离衰减」，远 token 和近 token 一视同仁；<span class="p">方法</span> 给 state 加指数衰减 $\gamma$，支持并行/递归/分块三种等价计算；<span class="p">核心</span> 把「衰减」引入线性注意力，LLM 级可扩展的早期代表；后续 GLA 指出固定衰减不随输入变、recall 仍有限，改成数据依赖门控——RetNet 的衰减思想被继承、固定门被弃。</span></p>
 
 <p class="paper"><b>GLA（Gated Linear Attention，FlashLinearAttention）</b>（<a href="https://arxiv.org/abs/2312.06635">2312.06635</a>，Yang et al. 2023）<br>
 <code class="recipe">linear(gated) -&gt; 数据依赖遗忘 + 硬件高效 [$G_t \odot S + k\cdot v^{\top}$]</code><br>
-<span class="idea"><span class="p">问题</span> RetNet 的衰减是固定的、不随输入变；<span class="p">方法</span> 把衰减门 G_t 变成数据依赖（每个 token 自己决定忘多少），并给出 I/O 感知的分块算法；<span class="p">核心</span> 门控线性注意力的标准范式，FlashLinearAttention 成为后续很多工作的底座。</span></p>
+<span class="idea"><span class="p">问题</span> RetNet 的衰减是固定的、不随输入变；<span class="p">方法</span> 把衰减门 G_t 变成数据依赖（每个 token 自己决定忘多少），并给出 I/O 感知的分块算法；<span class="p">核心</span> 门控线性注意力的标准范式，FlashLinearAttention 成为后续很多工作的底座；后续 DeltaNet 指出加性 state 只会叠加、不能修正旧值，改成「先删后写」——GLA 的门控思想被继承，加性 state 被 delta 规则改掉。</span></p>
 
 <p class="paper"><b>Lightning Attention-2</b>（<a href="https://arxiv.org/abs/2401.04658">2401.04658</a>，Qin et al. 2024，MiniMax）<br>
 <code class="recipe">linear(tiled) -&gt; 恒定速度、任意长度 [分块打破 cumsum 瓶颈]</code><br>
-<span class="idea"><span class="p">问题</span> 因果线性注意力的累计求和（cumsum）让它在实际里快不起来；<span class="p">方法</span> 用「分块 + 块内并行」的 tiling 策略，消除 cumsum 瓶颈；<span class="p">核心</span> 第一个真正做到「长度任意、速度恒定」的线性注意力实现，是 MiniMax 旗舰的底座。</span></p>
+<span class="idea"><span class="p">问题</span> 因果线性注意力的累计求和（cumsum）让它在实际里快不起来；<span class="p">方法</span> 用「分块 + 块内并行」的 tiling 策略，消除 cumsum 瓶颈；<span class="p">核心</span> 第一个真正做到「长度任意、速度恒定」的线性注意力实现，是 MiniMax 旗舰的底座；后续 delta / 混合架构指出它 state 表达仍弱，把实现加速留下、把 state 更新换成更可表达的规则。</span></p>
 
 <p class="paper"><b>Based（Simple Linear Attention）</b>（<a href="https://arxiv.org/abs/2402.18668">2402.18668</a>，Arora et al. 2024）<br>
 <code class="recipe">linear(Taylor 特征) + 滑窗 -&gt; 召回-吞吐权衡 [定长 state 的 recall 上限]</code><br>
-<span class="idea"><span class="p">问题</span> 线性模型的 state 大小和 recall 能力到底是什么关系；<span class="p">方法</span> 用 Taylor 特征近似 softmax + 滑窗注意力，理论+实验刻画「state 尺寸 vs 召回」的权衡；<span class="p">核心</span> 说清了一个根本约束：定长 state 必然有 recall 上限。</span></p>
+<span class="idea"><span class="p">问题</span> 线性模型的 state 大小和 recall 能力到底是什么关系；<span class="p">方法</span> 用 Taylor 特征近似 softmax + 滑窗注意力，理论+实验刻画「state 尺寸 vs 召回」的权衡；<span class="p">核心</span> 说清了一个根本约束：定长 state 必然有 recall 上限；后续 delta 规则用「可编辑记忆」在这个上限内提升联想召回，Based 的权衡刻画被当作地基保留。</span></p>
 
 <p class="paper"><b>ABC（Attention with Bounded-memory Control）</b>（<a href="https://arxiv.org/abs/2110.02488">2110.02488</a>，Peng et al. 2021）<br>
 <code class="recipe">linear(有界记忆) -&gt; $O(n)$ [统一各类高效注意力 + 可学习记忆组织]</code><br>
@@ -132,7 +132,7 @@ window.MathJax = {
 
 <p class="paper"><b>Mamba（Selective SSM）</b>（<a href="https://arxiv.org/abs/2312.00752">2312.00752</a>，Gu &amp; Dao 2023）<br>
 <code class="recipe">ssm(selective) -&gt; $O(n)$ [输入依赖的状态转移]</code><br>
-<span class="idea"><span class="p">问题</span> 经典 SSM 转移矩阵固定、表达力弱；<span class="p">方法</span> 让转移参数依赖输入（选择性 SSM）+ 硬件感知算法；<span class="p">核心</span> SSM 路线复兴，线性复杂度 + 内容感知的标杆（详见 long-context）。</span></p>
+<span class="idea"><span class="p">问题</span> 经典 SSM 转移矩阵固定、表达力弱；<span class="p">方法</span> 让转移参数依赖输入（选择性 SSM）+ 硬件感知算法；<span class="p">核心</span> SSM 路线复兴，线性复杂度 + 内容感知的标杆（详见 long-context）；后续 Mamba-2 指出 SSM 与注意力理论割裂、精确检索不足，用 SSD 统一，混合架构再补 attention——选择性 SSM 被继承为底座。</span></p>
 
 <div class="deep">
 <p class="paper"><b>Mamba-2 / SSD（Transformers are SSMs）</b>（<a href="https://arxiv.org/abs/2405.21060">2405.21060</a>，Dao &amp; Gu 2024）<br>
@@ -142,11 +142,11 @@ window.MathJax = {
 
 <p class="paper"><b>xLSTM（Extended LSTM）</b>（<a href="https://arxiv.org/abs/2405.04517">2405.04517</a>，Beck et al. 2024）<br>
 <code class="recipe">linear(门控 RNN) -&gt; 复活 LSTM 到 LLM [mLSTM 矩阵记忆 + sLSTM]</code><br>
-<span class="idea"><span class="p">问题</span> LSTM 被 Transformer 取代，但 RNN 的线性复杂度有价值；<span class="p">方法</span> 用指数门控 + 矩阵记忆（mLSTM）和标量记忆（sLSTM）现代化 LSTM；<span class="p">核心</span> 让 LSTM 重新能训 LLM，是综述里「代码/时序最强」的子平方架构。</span></p>
+<span class="idea"><span class="p">问题</span> LSTM 被 Transformer 取代，但 RNN 的线性复杂度有价值；<span class="p">方法</span> 用指数门控 + 矩阵记忆（mLSTM）和标量记忆（sLSTM）现代化 LSTM；<span class="p">核心</span> 让 LSTM 重新能训 LLM，是综述里「代码/时序最强」的子平方架构；后续少有单独做成旗舰，更多被混合架构吸收为组件，这条「纯 xLSTM」路线基本搁置。</span></p>
 
 <p class="paper"><b>RWKV-4（Reinventing RNNs）</b>（<a href="https://arxiv.org/abs/2305.13048">2305.13048</a>，Peng et al. 2023）<br>
 <code class="recipe">linear(RNN) -&gt; $O(n)$ [WKV 线性注意力 + 时移混合]</code><br>
-<span class="idea"><span class="p">问题</span> Transformer $O(n^2)$；<span class="p">方法</span> 把注意力改写成可 RNN 递推的线性形式；<span class="p">核心</span> 独立提出的 $O(n)$ LLM 路线（详见 long-context）。</span></p>
+<span class="idea"><span class="p">问题</span> Transformer $O(n^2)$；<span class="p">方法</span> 把注意力改写成可 RNN 递推的线性形式；<span class="p">核心</span> 独立提出的 $O(n)$ LLM 路线（详见 long-context）；后续 RWKV-5/6/7 指出标量 state 表达力弱、recall 有限，改成矩阵 state 再到向量门控 delta——RWKV 线持续改、没被弃。</span></p>
 
 <p class="paper"><b>Eagle &amp; Finch（RWKV-5 / RWKV-6）</b>（<a href="https://arxiv.org/abs/2404.05892">2404.05892</a>，Peng et al. 2024）<br>
 <code class="recipe">linear(矩阵 state + 动态递推) -&gt; 表达力提升 [multi-head 矩阵 state]</code><br>

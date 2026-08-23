@@ -118,13 +118,13 @@ window.MathJax = {
 <div class="deep">
 <p class="paper"><b>SWE-bench</b>（<a href="https://arxiv.org/abs/2310.06770">2310.06770</a>，Jimenez et al. 2023）<br>
 <code class="recipe">benchmark -&gt; 真实 GitHub issue 修复 [issue + PR + 测试判定]</code><br>
-<span class="idea"><span class="p">问题</span> coding agent 怎么量化；<span class="p">方法</span> 收集真实 GitHub issue + 对应修复 PR，用「跑测试」判定是否修好；<span class="p">核心</span> 让 coding agent 可评测，是整个 harness 生态的起点（SWE-bench Verified 是其干净子集）。</span></p>
+<span class="idea"><span class="p">问题</span> coding agent 怎么量化；<span class="p">方法</span> 收集真实 GitHub issue + 对应修复 PR，用「跑测试」判定是否修好；<span class="p">核心</span> 让 coding agent 可评测，是整个 harness 生态的起点；后续 SWE-bench Verified 指出原版含污染/易破解样本，抽干净子集——评测协议被修正、任务定义被保留。</span></p>
 </div>
 
 <div class="deep">
 <p class="paper"><b>SWE-agent（Agent-Computer Interface）</b>（<a href="https://arxiv.org/abs/2405.15793">2405.15793</a>，Yang et al. 2024）<br>
 <code class="recipe">aci(命令 + 文件编辑 + 测试) -&gt; 大幅涨点 [自研 ACI 是核心贡献]</code><br>
-<span class="idea"><span class="p">问题</span> agent 在 SWE-bench 上表现差，卡在哪；<span class="p">方法</span> 提出「Agent-Computer Interface」概念，精心设计命令/文件编辑/diff/测试等接口，让 GPT-4 从 3% 涨到 12%；<span class="p">核心</span> 「接口设计」这一概念的开山，证明 harness 的 ACI 比换模型更关键。</span></p>
+<span class="idea"><span class="p">问题</span> agent 在 SWE-bench 上表现差，卡在哪；<span class="p">方法</span> 提出「Agent-Computer Interface」概念，精心设计命令/文件编辑/diff/测试等接口，让 GPT-4 从 3% 涨到 12%；<span class="p">核心</span> 「接口设计」这一概念的开山，证明 harness 的 ACI 比换模型更关键；后续 Agentless 指出复杂多轮 agent 未必更好，但 ACI 概念被保留为 harness 研究的核心轴。</span></p>
 </div>
 
 <p class="paper"><b>OpenHands</b>（<a href="https://arxiv.org/abs/2407.16741">2407.16741</a>，Wang et al. 2024）<br>

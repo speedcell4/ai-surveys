@@ -68,19 +68,19 @@ window.MathJax = {
 
 <p class="paper"><b>Sparse Transformer</b>（<a href="https://arxiv.org/abs/1904.10509">1904.10509</a>，Child et al. 2019）<br>
 <code class="recipe">sparse(strided + fixed) -&gt; $O(n\sqrt{n})$ [稀疏注意力分解]</code><br>
-<span class="idea"><span class="p">问题</span> 注意力时间/显存随长度平方涨；<span class="p">方法</span> 把注意力矩阵分解成 strided（跨步）和 fixed（固定局部）两种稀疏模式，复杂度降到 $O(n\sqrt{n})$；<span class="p">核心</span> 稀疏注意力的开山，最早把长序列（图像/音频/文本）做成可行。</span></p>
+<span class="idea"><span class="p">问题</span> 注意力时间/显存随长度平方涨；<span class="p">方法</span> 把注意力矩阵分解成 strided（跨步）和 fixed（固定局部）两种稀疏模式，复杂度降到 $O(n\sqrt{n})$；<span class="p">核心</span> 稀疏注意力的开山，最早把长序列（图像/音频/文本）做成可行；后续 BigBird / Longformer 指出固定模式不通用、质量有损，NSA 又把稀疏改成原生可训练的动态选择——稀疏这条线被继承，固定模式被改。</span></p>
 
 <p class="paper"><b>Reformer</b>（<a href="https://arxiv.org/abs/2001.04451">2001.04451</a>，Kitaev et al. 2020）<br>
 <code class="recipe">sparse(LSH) + reversible -&gt; $O(n \log n)$ [局部敏感哈希 + 可逆残差]</code><br>
-<span class="idea"><span class="p">问题</span> 全注意力在长序列上算不动、且要存激活；<span class="p">方法</span> 用局部敏感哈希（LSH）只让相似 token 互相注意，配可逆残差省激活内存；<span class="p">核心</span> 「哈希近似注意力」路线，复杂度 $O(n \log n)$。</span></p>
+<span class="idea"><span class="p">问题</span> 全注意力在长序列上算不动、且要存激活；<span class="p">方法</span> 用局部敏感哈希（LSH）只让相似 token 互相注意，配可逆残差省激活内存；<span class="p">核心</span> 「哈希近似注意力」路线，复杂度 $O(n \log n)$；后续指出 LSH 有近似误差、实现复杂，主流没沿用，这条线基本被放弃。</span></p>
 
 <p class="paper"><b>Longformer</b>（<a href="https://arxiv.org/abs/2004.05150">2004.05150</a>，Beltagy et al. 2020）<br>
 <code class="recipe">sparse(滑窗 + 全局 + 膨胀) -&gt; $O(n)$ [三种稀疏模式组合]</code><br>
-<span class="idea"><span class="p">问题</span> 长文档（数千 token）放不进全注意力；<span class="p">方法</span> 组合滑动窗口、任务相关的全局 token、膨胀窗口三种稀疏模式；<span class="p">核心</span> $O(n)$ 复杂度，成为长文档 NLP 的常用底座。</span></p>
+<span class="idea"><span class="p">问题</span> 长文档（数千 token）放不进全注意力；<span class="p">方法</span> 组合滑动窗口、任务相关的全局 token、膨胀窗口三种稀疏模式；<span class="p">核心</span> $O(n)$ 复杂度，成为长文档 NLP 的常用底座；后续 NSA 指出固定稀疏不通用、选择方式该可训练，把稀疏改成原生可训练 + 硬件对齐——Longformer 的滑窗/全局思想被继承。</span></p>
 
 <p class="paper"><b>BigBird</b>（<a href="https://arxiv.org/abs/2007.14062">2007.14062</a>，Zaheer et al. 2020）<br>
 <code class="recipe">sparse(随机 + 滑窗 + 全局) -&gt; $O(n)$ [随机图 + 局部 + 全局]</code><br>
-<span class="idea"><span class="p">问题</span> 稀疏注意力凭什么能替代全注意力；<span class="p">方法</span> 用随机、滑窗、全局三类边的稀疏图，并给出理论（稀疏注意力在图灵完备性上的等价刻画）；<span class="p">核心</span> 既省算力又给出理论保证，稀疏注意力的代表性理论工作。</span></p>
+<span class="idea"><span class="p">问题</span> 稀疏注意力凭什么能替代全注意力；<span class="p">方法</span> 用随机、滑窗、全局三类边的稀疏图，并给出理论（稀疏注意力在图灵完备性上的等价刻画）；<span class="p">核心</span> 既省算力又给出理论保证，稀疏注意力的代表性理论工作；后续 NSA / DSA 指出随机图模式不如动态选择，改成按分数选 token / block——理论保证被保留，固定随机模式被改。</span></p>
 
 <div class="deep">
 <p class="paper"><b>FlashAttention</b>（<a href="https://arxiv.org/abs/2205.14135">2205.14135</a>，Dao et al. 2022）<br>
@@ -107,18 +107,18 @@ window.MathJax = {
 
 <p class="paper"><b>Sinkformers（Doubly Stochastic Attention）</b>（<a href="https://arxiv.org/abs/2110.11773">2110.11773</a>，2021）<br>
 <code class="recipe">sink(Sinkhorn) -&gt; 长序列稳定 [双随机注意力]</code><br>
-<span class="idea"><span class="p">问题</span> softmax 只做行归一化，注意力的「吸收」分布不对称、长序列易崩；<span class="p">方法</span> 用 Sinkhorn 算法把注意力矩阵变成行、列都归一化的双随机矩阵；<span class="p">核心</span> 「sink」这个词在注意力语境里的早期出现，为后来的 attention sink 分析埋下伏笔。</span></p>
+<span class="idea"><span class="p">问题</span> softmax 只做行归一化，注意力的「吸收」分布不对称、长序列易崩；<span class="p">方法</span> 用 Sinkhorn 算法把注意力矩阵变成行、列都归一化的双随机矩阵；<span class="p">核心</span> 「sink」这个词在注意力语境里的早期出现，为后来的 attention sink 分析埋下伏笔；后续 StreamingLLM 把问题简化成「保留 sink token + 滑窗」，Sinkhorn 双随机的路线基本被弃。</span></p>
 
 <div class="deep">
 <p class="paper"><b>StreamingLLM（Efficient Streaming LMs with Attention Sinks）</b>（<a href="https://arxiv.org/abs/2309.17453">2309.17453</a>，Xiao et al. 2023，ICLR 2024）<br>
 <code class="recipe">dense -&gt; 无限流式 [sink token + 滑动窗口]</code><br>
-<span class="idea"><span class="p">问题</span> 流式推理只保留最近 token 的滑窗会崩、PPL 骤升；<span class="p">方法</span> 发现「attention sink」——softmax 的副产品让最初几个 token 吸收大量注意力，保留这几个 sink token + 最近 token 即可无限流式、不重训；<span class="p">核心</span> 首次命名 attention sink、给出「4 个 sink + 滑窗」即可流式这一经验规律，奠定「sink 必须留」的共识。</span></p>
+<span class="idea"><span class="p">问题</span> 流式推理只保留最近 token 的滑窗会崩、PPL 骤升；<span class="p">方法</span> 发现「attention sink」——softmax 的副产品让最初几个 token 吸收大量注意力，保留这几个 sink token + 最近 token 即可无限流式、不重训；<span class="p">核心</span> 首次命名 attention sink、给出「4 个 sink + 滑窗」即可流式这一经验规律，奠定「sink 必须留」的共识；后续 Gated Attention 指出只留 sink + 滑窗会丢中间信息，改成直接消除 sink，GPT-OSS 则把 sink 做成可训练参数——sink 从 workaround 被收编。</span></p>
 </div>
 
 <div class="deep">
 <p class="paper"><b>H2O（Heavy-Hitter Oracle）</b>（<a href="https://arxiv.org/abs/2306.14048">2306.14048</a>，Zhang et al. 2023，NeurIPS 2023）<br>
 <code class="recipe">evict -&gt; KV 压缩 20× [保留 heavy-hitter + 最近 token]</code><br>
-<span class="idea"><span class="p">问题</span> KV 缓存随长度线性增长、撑爆显存；<span class="p">方法</span> 发现注意力分数是重尾的——少数 heavy-hitter token 贡献大部分注意力，据此动态驱逐、只保留 heavy-hitter 和最近 token；<span class="p">核心</span> KV 驱逐派的开山，带理论保证，是 SnapKV/PyramidKV 等后续工作的起点。</span></p>
+<span class="idea"><span class="p">问题</span> KV 缓存随长度线性增长、撑爆显存；<span class="p">方法</span> 发现注意力分数是重尾的——少数 heavy-hitter token 贡献大部分注意力，据此动态驱逐、只保留 heavy-hitter 和最近 token；<span class="p">核心</span> KV 驱逐派的开山，带理论保证，是 SnapKV/PyramidKV 等后续工作的起点；后续 SnapKV 指出逐 token 分数不稳，改「观察窗口投票」，PyramidKV 又按层分预算——H2O 的驱逐思想被继承、判分方式被改。</span></p>
 </div>
 
 <p class="paper"><b>Massive Activations in LLMs</b>（<a href="https://arxiv.org/abs/2402.17762">2402.17762</a>，Sun et al. 2024）<br>
@@ -238,22 +238,22 @@ window.MathJax = {
 
 <p class="paper"><b>RoPE（Rotary Position Embedding）</b>（<a href="https://arxiv.org/abs/2104.09864">2104.09864</a>，Su et al. 2021）<br>
 <code class="recipe">rope -&gt; 相对位置 [复数旋转编码]</code><br>
-<span class="idea"><span class="p">问题</span> 绝对位置编码难表达相对距离；<span class="p">方法</span> 用旋转矩阵把位置编码进 QK 内积，天然带相对距离；<span class="p">核心</span> 现代 LLM 默认位置编码，长上下文外推研究的起点。</span></p>
+<span class="idea"><span class="p">问题</span> 绝对位置编码难表达相对距离；<span class="p">方法</span> 用旋转矩阵把位置编码进 QK 内积，天然带相对距离；<span class="p">核心</span> 现代 LLM 默认位置编码，长上下文外推研究的起点；后续 PI / YaRN 指出它直接外推会崩，改成缩放频率——RoPE 线没被弃，成了缩放外推的主流底座。</span></p>
 
 <p class="paper"><b>ALiBi（Train Short, Test Long）</b>（<a href="https://arxiv.org/abs/2108.12409">2108.12409</a>，Press et al. 2021）<br>
 <code class="recipe">alibi -&gt; 免训外推 [线性距离偏置]</code><br>
-<span class="idea"><span class="p">问题</span> 位置编码外推能力差；<span class="p">方法</span> 给注意力加「随距离线性衰减」的偏置，不学位置编码；<span class="p">核心</span> 零外推成本，最早系统论证「外推」这件事。</span></p>
+<span class="idea"><span class="p">问题</span> 位置编码外推能力差；<span class="p">方法</span> 给注意力加「随距离线性衰减」的偏置，不学位置编码；<span class="p">核心</span> 零外推成本，最早系统论证「外推」这件事；后续主流模型（LLaMA 系）改回 RoPE + NTK/YaRN 缩放，ALiBi 这条免训线性偏置线基本被弃。</span></p>
 
 <div class="deep">
 <p class="paper"><b>Position Interpolation（PI）</b>（<a href="https://arxiv.org/abs/2306.15595">2306.15595</a>，Chen et al. 2023）<br>
 <code class="recipe">pi -&gt; 微调 1000 步到 32K [位置线性缩放]</code><br>
-<span class="idea"><span class="p">问题</span> RoPE 直接外推到训练长度之外会崩；<span class="p">方法</span> 把目标长度按比例线性压缩回训练区间（位置做线性插值），再少量微调；<span class="p">核心</span> 长上下文外推的开山，证明「小步微调 + 位置插值」即可把 LLaMA 从 2K 拉到 32K，后续 YaRN/LongRoPE 都在此基础上改进。</span></p>
+<span class="idea"><span class="p">问题</span> RoPE 直接外推到训练长度之外会崩；<span class="p">方法</span> 把目标长度按比例线性压缩回训练区间（位置做线性插值），再少量微调；<span class="p">核心</span> 长上下文外推的开山，证明「小步微调 + 位置插值」即可把 LLaMA 从 2K 拉到 32K；后续 YaRN 指出线性缩放破坏高频、丢短上下文精度，改成 NTK 非均匀缩放 + 温度修正——PI 的插值思想被继承、均匀缩放被改。</span></p>
 </div>
 
 <div class="deep">
 <p class="paper"><b>YaRN（Yet another RoPE extensioN）</b>（<a href="https://arxiv.org/abs/2309.00071">2309.00071</a>，Peng et al. 2023）<br>
 <code class="recipe">yarn -&gt; 128K 外推 [NTK 频率缩放 + 注意力温度]</code><br>
-<span class="idea"><span class="p">问题</span> PI 线性缩放会破坏高频、丢短上下文精度；<span class="p">方法</span> 用 NTK-aware 非均匀缩放频率（低频多缩、高频少缩）+ 注意力温度修正；<span class="p">核心</span> 免训/微调外推的主流方案，成为 Code Llama 等开源模型的外推默认件。</span></p>
+<span class="idea"><span class="p">问题</span> PI 线性缩放会破坏高频、丢短上下文精度；<span class="p">方法</span> 用 NTK-aware 非均匀缩放频率（低频多缩、高频少缩）+ 注意力温度修正；<span class="p">核心</span> 免训/微调外推的主流方案，成为 Code Llama 等开源模型的外推默认件；后续 LongRoPE 指出均匀 NTK 仍损失短上下文精度，改进化搜索非均匀缩放——YaRN 的 NTK 思想被继承、缩放规则被改。</span></p>
 </div>
 
 <p class="paper"><b>LongRoPE</b>（<a href="https://arxiv.org/abs/2402.13753">2402.13753</a>，Ding et al. 2024）<br>

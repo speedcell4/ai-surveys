@@ -91,30 +91,30 @@ window.MathJax = {
 
 <p class="paper"><b>Flamingo</b>（<a href="https://arxiv.org/abs/2204.14198">2204.14198</a>）<br>
 <code class="recipe">Flamingo: rep(clip) -&gt; ar [dec，理解-only]</code><br>
-<span class="idea"><span class="p">问题</span> 语言模型怎么「看懂」图像做 few-shot；<span class="p">方法</span> 冻结预训练视觉编码器 + 交叉注意力注入 LLM；<span class="p">效果</span> 确立了「视觉编码器 + LLM」的理解范式，但它是理解-only、不含生成。</span></p>
+<span class="idea"><span class="p">问题</span> 语言模型怎么「看懂」图像做 few-shot；<span class="p">方法</span> 冻结预训练视觉编码器 + 交叉注意力注入 LLM；<span class="p">效果</span> 确立了「视觉编码器 + LLM」的理解范式，但它是理解-only、不含生成；后续 Fuyu / Tuna-2 质疑视觉编码器是否必需，直接吃像素 patch——Flamingo 的冻结编码器 + 交叉注意力仍是理解主流，「必须有编码器」被挑战。</span></p>
 
 <p class="paper"><b>Fuyu-8B</b>（Adept 2023，<a href="https://www.adept.ai/blog/fuyu-8b">技术博客</a>）<br>
 <code class="recipe">Fuyu-8B: pixel -&gt; ar [1T，无编码器]</code><br>
-<span class="idea"><span class="p">问题</span> 视觉编码器带来架构复杂与信息损失；<span class="p">方法</span> 直接把图像 patch 线性投影进 decoder-only Transformer，无专门视觉编码器；<span class="p">效果</span> 最早证明「无编码器」可行，但只做理解、不生成。</span></p>
+<span class="idea"><span class="p">问题</span> 视觉编码器带来架构复杂与信息损失；<span class="p">方法</span> 直接把图像 patch 线性投影进 decoder-only Transformer，无专门视觉编码器；<span class="p">效果</span> 最早证明「无编码器」可行，但只做理解、不生成；后续 Tuna-2 指出 encoder-free 早期收敛慢、规模上去后更强——Fuyu 的 encoder-free 思想被继承。</span></p>
 
 <p class="paper"><b>Chameleon</b>（<a href="https://arxiv.org/abs/2405.09818">2405.09818</a>）<br>
 <code class="recipe">Chameleon: vq -&gt; ar(全模态) [1T，early-fusion]</code><br>
-<span class="idea"><span class="p">问题</span> 多模态模型各模态拼装、割裂；<span class="p">方法</span> 文本与图像都离散成 token、一个 Transformer 从头训练做 next-token；<span class="p">效果</span> 早期 mixed-modal early-fusion 代表作，证明单模型全模态 next-token 可行。</span></p>
+<span class="idea"><span class="p">问题</span> 多模态模型各模态拼装、割裂；<span class="p">方法</span> 文本与图像都离散成 token、一个 Transformer 从头训练做 next-token；<span class="p">效果</span> 早期 mixed-modal early-fusion 代表作，证明单模型全模态 next-token 可行；后续 Show-o2 / Tuna 指出离散 token 有量化损失、质量受限，改连续表示——Chameleon 的单模型 early-fusion 思想被继承、全离散被部分弃。</span></p>
 
 <p class="paper"><b>Transfusion</b>（<a href="https://arxiv.org/abs/2408.11039">2408.11039</a>）<br>
 <code class="recipe">Transfusion: vae -&gt; ar / diff [1T]</code><br>
-<span class="idea"><span class="p">问题</span> 文本与图像各用一套模型、一个模型两个目标；<span class="p">方法</span> 单 Transformer，文本走 next-token、图像走去噪扩散，两个目标共享权重；<span class="p">效果</span> 「一个模型两个目标」的标志性工作，后续 Tuna/Show-o 的框架底座。</span></p>
+<span class="idea"><span class="p">问题</span> 文本与图像各用一套模型、一个模型两个目标；<span class="p">方法</span> 单 Transformer，文本走 next-token、图像走去噪扩散，两个目标共享权重；<span class="p">效果</span> 「一个模型两个目标」的标志性工作，后续 Tuna / Show-o 的框架底座；后续 Tuna 指出其视觉表示不够统一，把 VAE 与表示编码器级联成一个连续表示——Transfusion 的双 head 共享权重被继承。</span></p>
 
 <h3>3.2 离散 token 派（纯 AR）</h3>
 <p class="trend">这条路把图像也离散成 VQ token，于是「生成」和「理解」都变成同一个 next-token 问题，架构最干净，代价是量化损失。</p>
 
 <p class="paper"><b>Emu3</b>（<a href="https://arxiv.org/abs/2409.18869">2409.18869</a>）<br>
 <code class="recipe">Emu3: vq -&gt; ar(全模态) [1T，纯 next-token]</code><br>
-<span class="idea"><span class="p">问题</span> 统一多模态能否只靠一个 next-token 目标；<span class="p">方法</span> 文本+图像+视频全离散成 token，单一 Transformer 纯 next-token 训练；<span class="p">效果</span> 把「next-token is all you need」推到多模态，理解/生成/视频统一。</span></p>
+<span class="idea"><span class="p">问题</span> 统一多模态能否只靠一个 next-token 目标；<span class="p">方法</span> 文本+图像+视频全离散成 token，单一 Transformer 纯 next-token 训练；<span class="p">效果</span> 把「next-token is all you need」推到多模态，理解/生成/视频统一；后续 Tuna 指出离散 token 有量化损失、质量受限，转连续 flow——Emu3 的 next-token 统一思想被保留、离散 token 被部分弃。</span></p>
 
 <p class="paper"><b>Show-o</b>（<a href="https://arxiv.org/abs/2408.12528">2408.12528</a>）<br>
 <code class="recipe">Show-o: vq -&gt; ar + diff(离散) [1T]</code><br>
-<span class="idea"><span class="p">问题</span> 理解与生成难统一在一个模型；<span class="p">方法</span> 离散视觉 token，文本 next-token + 图像离散扩散两个目标共享 Transformer；<span class="p">效果</span> 早期单 Transformer 统一理解生成的代表，Show-o2 是改进版。</span></p>
+<span class="idea"><span class="p">问题</span> 理解与生成难统一在一个模型；<span class="p">方法</span> 离散视觉 token，文本 next-token + 图像离散扩散两个目标共享 Transformer；<span class="p">效果</span> 早期单 Transformer 统一理解生成的代表，Show-o2 是改进版；后续 Show-o2 指出离散 token 有量化损失、质量受限，改连续视觉表示 + flow——Show-o 的共享 Transformer 被继承、离散扩散被改。</span></p>
 
 <p class="paper"><b>VILA-U</b>（<a href="https://arxiv.org/abs/2409.04429">2409.04429</a>）<br>
 <code class="recipe">VILA-U: vq -&gt; ar + diff [1T]</code><br>
@@ -129,7 +129,7 @@ window.MathJax = {
 
 <p class="paper"><b>Janus-Pro</b>（<a href="https://arxiv.org/abs/2501.17811">2501.17811</a>）<br>
 <code class="recipe">Janus-Pro: rep(理解) + vq(生成) -&gt; ar [dec，双端分离]</code><br>
-<span class="idea"><span class="p">问题</span> 理解要语义表示、生成要重建表示，二者冲突；<span class="p">方法</span> 理解与生成各用一套编码器、解耦，但共享同一个 LLM；<span class="p">效果</span> 「双端分离」路线代表，避免统一表示的格式打架。</span></p>
+<span class="idea"><span class="p">问题</span> 理解要语义表示、生成要重建表示，二者冲突；<span class="p">方法</span> 理解与生成各用一套编码器、解耦，但共享同一个 LLM；<span class="p">效果</span> 「双端分离」路线代表，避免统一表示的格式打架；后续 JanusFlow 指出离散 token 生成质量有限，把生成端换成 rectified flow + VAE——Janus 的双端解耦被继承。</span></p>
 
 <p class="paper"><b>JanusFlow</b>（<a href="https://arxiv.org/abs/2411.07975">2411.07975</a>，CVPR 2026）<br>
 <code class="recipe">JanusFlow: rep(理解) + vae(生成) -&gt; ar / flow [dec]</code><br>
