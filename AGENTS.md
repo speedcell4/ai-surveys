@@ -140,12 +140,12 @@
 
 ## 交付
 
-- 直接手写 HTML（不要 Markdown 转 HTML），内联 CSS，单文件自包含，风格对齐本仓库已有文件。
-- 成品放仓库根目录，更新 `index.html` 和 `README.md` 的索引。
+- 直接手写 HTML（不要 Markdown 转 HTML），内联 CSS，单文件自包含，风格对齐 `surveys/` 下已有文件。
+- HTML 成品放 `surveys/<topic>.html`，台账放 `data/<topic>.jsonl`；更新根目录 `index.html` 和 `README.md` 的索引。
 
 ## 论文台账（每个主题一份 JSONL）
 
-每个主题一份 `<topic>.jsonl`，一行一篇，是**决策日志**——不只是「写了什么」，而是凡是你打开看过、读过的论文，无论最终进不进 HTML，都要 append 一行。
+每个主题一份 `data/<topic>.jsonl`，一行一篇，是**决策日志**——不只是「写了什么」，而是凡是你打开看过、读过的论文，无论最终进不进 HTML，都要 append 一行。
 
 字段（一行一个 JSON 对象，`ensure_ascii=False`）：
 
