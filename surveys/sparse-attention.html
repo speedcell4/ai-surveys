@@ -104,7 +104,7 @@ window.MathJax = {
 <span class="idea"><span class="p">问题</span> 1M token 上下文里注意力是主要计算瓶颈；<span class="p">方法</span> 混合 CSA（4:1 压缩 + 稀疏选择）、HCA（128:1 压缩 + 密集）、SWA（最近窗口原始 KV），配 MoE + Muon；<span class="p">核心</span> 1M 上下文下 V4-Pro 单 token FLOPs 只有 V3.2 的 27%、KV 缓存只有 10%。</span></p>
 
 <h2>4. block 级选择派（一次挑一整块）</h2>
-<p class="trend">选 block 的好处是硬件友好（连续内存、好做 kernel）、实现便宜；代价是块内 token 可能冗余。代表：MoBA 用 MoE 路由选块、Landmark/HiLS 用 landmark 代表块、MiniMax SA 用层次化块稀疏、MInference 识别块稀疏模式。</p>
+<p class="trend">选 block 的好处是硬件友好（连续内存、好做 kernel）、实现便宜；代价是块内 token 可能冗余。代表：MoBA 用 MoE 路由选块、Landmark/HiLS 用 landmark 代表块、MiniMax SA 用 GQA 组内 Top-k 块选择、MInference 识别块稀疏模式。</p>
 
 <p class="paper"><b>MoBA（Mixture of Block Attention，Kimi）</b>（<a href="https://arxiv.org/abs/2502.13189">2502.13189</a>，2025）<br>
 <code class="recipe">sparse(block + route) -&gt; 10M 上下文 [MoE 式块路由]</code><br>
@@ -119,8 +119,8 @@ window.MathJax = {
 <span class="idea"><span class="p">问题</span> chunk 稀疏注意力选不准、追不上 full attention；<span class="p">方法</span> query 先对各 chunk 独立算注意力提取 chunk 信息，再按检索分数融合，检索分数端到端可学习；<span class="p">核心</span> 原生稀疏训练，64× 外推仍有 90% 检索准确率，现有模型轻量续训即可转换。</span></p>
 
 <p class="paper"><b>MiniMax Sparse Attention（MSA）</b>（<a href="https://arxiv.org/abs/2606.13392">2606.13392</a>，2026）<br>
-<code class="recipe">sparse(block + 局部) -&gt; 十万到百万 token [层次化块稀疏]</code><br>
-<span class="idea"><span class="p">问题</span> agentic / 仓库级代码要求几十万到百万 token 联合注意力，softmax 部署不起；<span class="p">方法</span> blockwise 稀疏 + 局部窗口，训练推理都稀疏；<span class="p">核心</span> 工业级块稀疏的落地。</span></p>
+<code class="recipe">sparse(block + local) -&gt; $O(kB_k)$ [GQA 组内 Top-k block + 强制 local block]</code><br>
+<span class="idea"><span class="p">问题</span> agentic / 仓库级代码要联合看几十万到百万 token，softmax attention 二次成本部署不起；<span class="p">方法</span> 建在 GQA 上：把序列切成 $B_k$ 大小的 KV block，轻量 Index Branch 对每个 GQA group 用一个 index query head + 共享 index key head 先算 token 分数，再在块内 max-pool 得到 block 分数；每个 GQA group 独立 Top-k 选块，并强制保留当前 token 所在 local block。Main Branch 只在这些块上做精确 softmax attention，所以每 query 成本从 $O(N)$ 降到固定的 $O(kB_k)$。Index Branch 的 Top-k 不可导，训练时用 KL loss 让 index 分布对齐 Main Branch 概率（teacher stop-gradient），再加 indexer warmup / gradient detach 稳定稀疏训练；<span class="p">核心</span> 1M 上下文时 attention compute 降 28.4x，H800 上 prefill 14.2x、decode 7.6x。</span></p>
 
 <p class="paper"><b>MInference</b>（<a href="https://arxiv.org/abs/2407.02490">2407.02490</a>，Jiang et al. 2024）<br>
 <code class="recipe">sparse(block + 动态模式) -&gt; 10× 预填充加速 [A-shape / VS / Block-Sparse]</code><br>
