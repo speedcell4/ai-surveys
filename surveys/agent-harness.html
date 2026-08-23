@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Harness 速览</title>
+<style>
+:root { --accent:#be123c; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#fff1f2; }
+* { box-sizing: border-box; }
+body { margin:0; background:#fafafa; color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  line-height:1.75; font-size:16px; }
+.container { max-width:940px; margin:0 auto; padding:44px 28px 96px; background:#fff; box-shadow:0 0 0 1px var(--border); min-height:100vh; }
+h1 { font-size:1.75em; line-height:1.35; border-bottom:2px solid var(--accent); padding-bottom:.4em; margin:.1em 0 .2em; }
+.sub { color:var(--muted); margin-top:0; }
+h2 { font-size:1.32em; margin-top:2.2em; border-bottom:1px solid var(--border); padding-bottom:.3em; }
+h3 { font-size:1.1em; margin-top:1.8em; color:#111827; }
+a { color:var(--accent); text-decoration:none; }
+a:hover { text-decoration:underline; }
+table { width:100%; border-collapse:collapse; margin:1.2em 0; font-size:.94em; }
+th,td { border:1px solid var(--border); padding:.5em .75em; text-align:left; vertical-align:top; }
+th { background:#fff1f2; }
+tr:nth-child(even) td { background:#fafafa; }
+blockquote { border-left:4px solid var(--accent); margin:1.2em 0; padding:.5em 1em; background:var(--bg); color:#374151; border-radius:0 6px 6px 0; }
+.paper { margin:1.25em 0; }
+.paper b { color:#111827; }
+code.recipe { display:inline-block; margin:.4em 0; background:var(--bg); border-left:3px solid var(--accent); padding:.34em .72em; border-radius:5px; font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:.9em; color:#111827; }
+.idea { color:#374151; }
+.idea .p { color:#b91c1c; font-weight:600; }
+.trend { color:#374151; background:#fff1f2; border-left:3px solid #be123c; padding:.55em .85em; border-radius:5px; margin:.55em 0 1.1em; }
+.deep { background:#fff1f2; border:1px solid #fecdd3; border-radius:8px; padding:.1em 1em .5em; margin:1em 0; }
+hr { border:none; border-top:1px solid var(--border); margin:2.2em 0; }
+.note { color:var(--muted); font-size:.9em; }
+ol,ul { padding-left:1.5em; }
+li { margin:.35em 0; }
+@media (max-width:640px){ .container{padding:28px 16px 64px;} body{font-size:15px;} }
+</style>
+</head>
+<body>
+<main class="container">
+
+<h1>Agent Harness 速览（2023 ~ 2026）</h1>
+<p class="sub">把 LLM 变成能在真实仓库里干活、跑长任务的 coding agent 的那层「运行时」· 产品（Codex / Claude Code / Kimi Code / Pi / DeepSeek）+ 学术（2025-至今）· 检索时间 2026-08-23 · 每篇 = 配方 + 一句话</p>
+
+<h2>0. 记法（这个领域的「最大公约数」）</h2>
+<p>agent harness = 包在语言模型外面的那层运行时工程：它管「模型和环境的接口、上下文、工具、审批、迭代循环」。核心问题只有两个：<b>给 agent 什么样的行动接口</b>（ACI），以及<b>怎么在长任务里维持状态、不崩</b>。配方围绕这两轴：</p>
+<table>
+<tr><th>记号</th><th>意思</th></tr>
+<tr><td><code>aci</code></td><td>Agent-Computer Interface：agent 和环境的行动接口（命令/文件编辑/diff/测试）</td></tr>
+<tr><td><code>tools / sandbox / approval</code></td><td>工具调用 / 沙箱执行 / 审批权限边界</td></tr>
+<tr><td><code>context / compaction</code></td><td>上下文管理 / 压缩（长任务里 context 会爆）</td></tr>
+<tr><td><code>subagent / memory</code></td><td>子代理分工 / 跨 turn 记忆</td></tr>
+<tr><td><code>mcp / AGENTS.md</code></td><td>Model Context Protocol（工具生态）/ 项目上下文文件</td></tr>
+<tr><td><code>state-externalize</code></td><td>把「例行状态」从模型搬进环境（Harness-1 的思路）</td></tr>
+<tr><td><code>self-evolve</code></td><td>harness 自己改进自己（见 recursive-self-improvement）</td></tr>
+<tr><td><code>reward / verifier</code></td><td>agent RL 的奖励/验证器（跑测试、可执行）</td></tr>
+</table>
+<p>配方格式：<code>harness -&gt; 能力/结果 + 关键机制</code>。例：<code>SWE-agent: aci(命令+文件编辑+测试) -&gt; SWE-bench 涨点 [自研 ACI]</code>。</p>
+<blockquote>一句话主线：<b>早期大家以为瓶颈是模型，结果发现「给模型什么工具、什么上下文、什么循环」这层 harness 常常比模型本身更决定成败</b>——Agentless 用简单流水线打败复杂 agent，SWE-agent 证明调好 ACI 能大幅涨点。所以 2025 年的重心从「更强的模型」转向「更好的 harness」，甚至「让 harness 自己进化」。</blockquote>
+
+<h2>1. 主线：从「调模型」到「调 harness」</h2>
+<ol>
+<li><b>基准奠基（2023）</b>：SWE-bench 定义「真实 GitHub issue 修复」这个任务，让 coding agent 可量化。</li>
+<li><b>ACI 概念（2024）</b>：SWE-agent 提出 Agent-Computer Interface，证明「接口设计」决定成败；Agentless 反向证明「简单流水线」就够，复杂 agent 未必更好。</li>
+<li><b>产品化（2025）</b>：Codex CLI、Claude Code、Kimi Code、Pi 等终端 harness 爆火，把 harness 工程推到台前。</li>
+<li><b>harness 工程学术化（2025-2026）</b>：多篇综述（Code as Agent Harness、From QA to Task Completion）把「harness」立成独立研究方向，开始系统研究 context/工具/subagent/state 怎么设计。</li>
+<li><b>agent-native / 自我进化（2026）</b>：Harness-1 把例行状态搬进环境、Kimi-Dev 用 agentless 训练当 skill prior，harness 和训练开始合流。</li>
+</ol>
+<p>一条主轴：<b>性能的决定因素从「模型能力」转向「模型 × harness 的交互」</b>。交点是一个开放问题：<b>harness 的哪部分该进模型（训练/蒸馏），哪部分该留环境（运行时）？</b></p>
+
+<h2>2. 先读这三篇（综述 + 定义）</h2>
+<p class="trend">按规范先读 survey。这三篇把「agent harness」从松散的工程黑话立成有定义的学术对象，是建立地图的入口。</p>
+
+<div class="deep">
+<p class="paper"><b>Code as Agent Harness</b>（<a href="https://arxiv.org/abs/2605.18747">2605.18747</a>，UIUC/Meta/Stanford 2026，102 页）<br>
+<code class="recipe">survey -&gt; 代码作为 agent 的运行基底 [代码从「输出」变「执行基底」]</code><br>
+<span class="idea"><span class="p">问题</span> 代码不再只是 agent 的输出、而是 agent 推理和行动的运行基底，这个转变怎么理解；<span class="p">方法</span> 102 页综述，追问 agent 放进长期任务环境后 harness 怎么设计；<span class="p">核心</span> 把「code as harness」立成主题，是这一章最权威的地图。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>From Question Answering to Task Completion: Survey on Agent System and Harness Design</b>（<a href="https://arxiv.org/abs/2606.20683">2606.20683</a>，2026）<br>
+<code class="recipe">survey -&gt; 四个范式的演进 [prompt → workflow → harness → agent-native]</code><br>
+<span class="idea"><span class="p">问题</span> agent 从「问答」到「完成任务」，这条演进线怎么梳理；<span class="p">方法</span> 把 LLM agent 的发展分成 prompt engineering → agentic workflow → harness engineering → agent-native training 四个范式；<span class="p">核心</span> 核心洞察是「性能越来越由模型 × 运行时的交互决定，而非模型单独决定」。</span></p>
+</div>
+
+<p class="paper"><b>What Makes a Harness a Harness</b>（<a href="https://arxiv.org/abs/2606.10106">2606.10106</a>，2026）<br>
+<code class="recipe">theory -&gt; harness 的充要条件 [给「harness」下严格定义]</code><br>
+<span class="idea"><span class="p">问题</span> 「harness」一词被滥用——有时指整个产品、有时指中间件；<span class="p">方法</span> 用五个研究问题给「agent harness」下充要条件定义；<span class="p">核心</span> 把黑话变成可证伪的学术概念，是后续研究的概念锚点。</span></p>
+
+<h2>3. 产品 harness（Codex / Claude Code / Kimi Code / Pi / DeepSeek）</h2>
+<p class="trend">2025 年终端 coding agent 爆火，几家产品的 harness 设计成了事实标准。这些大多是工程/博客/系统卡而非单篇 arXiv，但它们是「harness 工程」最真实的标本。</p>
+
+<div class="deep">
+<p class="paper"><b>Codex（OpenAI）</b>（<a href="https://developers.openai.com/blog/codex-as-a-platform">Codex as a platform</a> · <a href="https://github.com/openai/codex">openai/codex</a>）<br>
+<code class="recipe">harness(开源 Rust) -&gt; 上下文/工具/审批/跨 turn [沙箱 + 审批策略 + AGENTS.md]</code><br>
+<span class="idea"><span class="p">问题</span> 怎么让 coding agent 在配置边界内可靠工作；<span class="p">方法</span> 开源 Rust harness：管会话状态、流式执行、工具调用、沙箱与审批策略、跨 turn 推进；<span class="p">核心</span> 把「harness engineering」做成产品——配套 GPT-5.1-Codex-Max 和系统卡，Codex 的开源 harness 也是它 IDE/桌面/云端形态的统一内核。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>Claude Code（Anthropic）</b>（<a href="https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents">Effective harnesses for long-running agents</a>，2025-11）<br>
+<code class="recipe">harness(Claude Agent SDK) -&gt; 长任务稳定 [subagent + compaction + 文件工具]</code><br>
+<span class="idea"><span class="p">问题</span> 长任务里 context 会爆、agent 会失焦，怎么维持稳定；<span class="p">方法</span> Claude Agent SDK + 子代理分工 + 上下文压缩 + 细粒度文件工具，工程博客系统总结「effective harness」实践；<span class="p">核心</span> 被多篇综述引为「harness 工程」的权威工程文档，Claude Code 的 harness 是行业参照。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>Kimi Code（Moonshot）</b>（<a href="https://arxiv.org/abs/2509.23045">Kimi-Dev 论文</a> · Kimi Code CLI）<br>
+<code class="recipe">harness + agentless 训练 -&gt; 60.4% SWE-bench Verified [agentless 当 skill prior]</code><br>
+<span class="idea"><span class="p">问题</span> SWE-agent（多轮交互）和 Agentless（单轮可验证步骤）两派怎么统一；<span class="p">方法</span> 用 agentless 训练当 skill prior，训出 72B 开源模型 Kimi-Dev；配 Kimi Code CLI（MCP、/init 生成 AGENTS.md）；<span class="p">核心</span> 产品 + 学术二合一，证明「训练一个 agentless skill prior」能喂出 SOTA 工作流 agent。</span></p>
+</div>
+
+<p class="paper"><b>Pi（earendil-works/pi）</b>（<a href="https://github.com/earendil-works/pi">github.com/earendil-works/pi</a>）<br>
+<code class="recipe">harness(自扩展) -&gt; 统一 LLM API + agent loop [self-extensible 编码 agent]</code><br>
+<span class="idea"><span class="p">问题</span> 开源 harness 怎么既统一又自扩展；<span class="p">方法</span> 开源 agent harness：统一 LLM API、agent loop、TUI、coding agent CLI，强调「self-extensible」；<span class="p">核心</span> 独立开发者主导的开源 harness（libGDX 作者 Mario Zechner），是「非大厂 harness 设计」的代表标本。</span></p>
+
+<p class="paper"><b>DeepSeek Harness</b>（<a href="https://arxiv.org/abs/2608.16393">安全评估 2608.16393</a> · <a href="https://arxiv.org/abs/2606.19348">V4 报告</a>）<br>
+<code class="recipe">harness(agent 后训练) -&gt; agent 能力 [领域 expert + on-policy 蒸馏]</code><br>
+<span class="idea"><span class="p">问题</span> DeepSeek 的 coding agent 怎么训、harness 安全边界如何；<span class="p">方法</span> V4 报告里的 agent 后训练（各领域独立 RL 出 expert、再 on-policy 蒸馏整合）+ 有第三方对其 harness 做间接提示注入安全评估；<span class="p">核心</span> 说明「harness」已进入大厂模型后训练流程，且安全成为 harness 的一等议题。</span></p>
+
+<h2>4. 地基（2023-2024，任务与接口的定义）</h2>
+<p class="trend">harness 研究的地基：SWE-bench 定义了任务、SWE-agent 定义了「接口即性能」、OpenHands 定义了开源平台、Agentless 泼了「复杂 agent 未必好」的冷水。</p>
+
+<div class="deep">
+<p class="paper"><b>SWE-bench</b>（<a href="https://arxiv.org/abs/2310.06770">2310.06770</a>，Jimenez et al. 2023）<br>
+<code class="recipe">benchmark -&gt; 真实 GitHub issue 修复 [issue + PR + 测试判定]</code><br>
+<span class="idea"><span class="p">问题</span> coding agent 怎么量化；<span class="p">方法</span> 收集真实 GitHub issue + 对应修复 PR，用「跑测试」判定是否修好；<span class="p">核心</span> 让 coding agent 可评测，是整个 harness 生态的起点（SWE-bench Verified 是其干净子集）。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>SWE-agent（Agent-Computer Interface）</b>（<a href="https://arxiv.org/abs/2405.15793">2405.15793</a>，Yang et al. 2024）<br>
+<code class="recipe">aci(命令 + 文件编辑 + 测试) -&gt; 大幅涨点 [自研 ACI 是核心贡献]</code><br>
+<span class="idea"><span class="p">问题</span> agent 在 SWE-bench 上表现差，卡在哪；<span class="p">方法</span> 提出「Agent-Computer Interface」概念，精心设计命令/文件编辑/diff/测试等接口，让 GPT-4 从 3% 涨到 12%；<span class="p">核心</span> 「接口设计」这一概念的开山，证明 harness 的 ACI 比换模型更关键。</span></p>
+</div>
+
+<p class="paper"><b>OpenHands</b>（<a href="https://arxiv.org/abs/2407.16741">2407.16741</a>，Wang et al. 2024）<br>
+<code class="recipe">platform -&gt; 通用 agent 平台 [开源 + 可插拔]</code><br>
+<span class="idea"><span class="p">问题</span> 缺一个能跑通用 agent 的开源平台；<span class="p">方法</span> 开源平台，代码执行、事件流、agent 抽象可插拔；<span class="p">核心</span> harness 研究的公共实验台，很多后续工作在上面做。</span></p>
+
+<p class="paper"><b>Agentless</b>（<a href="https://arxiv.org/abs/2407.01489">2407.01489</a>，Xia et al. 2024）<br>
+<code class="recipe">流水线(定位+修复+选补丁) -&gt; 简单打败复杂 agent [三段式非交互]</code><br>
+<span class="idea"><span class="p">问题</span> 复杂自主 agent 一定比简单流水线好吗；<span class="p">方法</span> 用「定位、修复、选补丁」三段非交互流水线，不用多轮 agent；<span class="p">核心</span> 简单流水线超过当时多数 agent，泼了「agent 复杂度 = 性能」的冷水。</span></p>
+
+<h2>5. 2025-2026 学术（harness 工程的深入）</h2>
+<p class="trend">harness 从「工程直觉」走向「系统研究」：纵向量化 harness 进化的贡献、总结终端 agent 的教训、把状态搬进环境、把 agentless 训练当 skill prior、以及更难的 live/真实经济基准。</p>
+
+<div class="deep">
+<p class="paper"><b>Don't Blame the LLM（How Agent Harness Evolution Shapes Quality）</b>（<a href="https://arxiv.org/abs/2607.03691">2607.03691</a>，2026）<br>
+<code class="recipe">analysis(纵向) -&gt; harness 进化贡献大 [系统提示/工具/上下文/循环]</code><br>
+<span class="idea"><span class="p">问题</span> coding agent 变好，到底靠模型还是靠 harness；<span class="p">方法</span> 纵向分析多个 harness 的发布历史，拆开系统提示、工具执行、上下文管理、迭代循环的各自贡献；<span class="p">核心</span> 结论「别怪模型」——harness 进化本身就在塑造质量，把 harness 贡献量化了。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>Building Effective AI Coding Agents for the Terminal</b>（<a href="https://arxiv.org/abs/2603.05344">2603.05344</a>，2026）<br>
+<code class="recipe">harness(终端) -&gt; 长程开发教训 [scaffolding + context + 工程实践]</code><br>
+<span class="idea"><span class="p">问题</span> 终端 native 的 coding agent 怎么做才稳；<span class="p">方法</span> 从 IDE 插件到终端 agent 的转变，总结 scaffolding、harness、context engineering 的教训；<span class="p">核心</span> 工程实践的系统化总结，和 Anthropic 那篇博客互为印证。</span></p>
+</div>
+
+<p class="paper"><b>Harness-1（State-Externalizing Harnesses）</b>（<a href="https://arxiv.org/abs/2606.02373">2606.02373</a>，Google 2026）<br>
+<code class="recipe">harness(状态外置) -&gt; 20B 搜索 agent 打平更大模型 [例行状态搬进环境]</code><br>
+<span class="idea"><span class="p">问题</span> 搜索 agent 被训成「长 transcript 上的策略」，被迫同时管搜索决策和例行状态；<span class="p">方法</span> 把例行状态（哪些证据有用、哪些检查过）从策略搬进环境侧的工作记忆；<span class="p">核心</span> 20B agent 八个检索基准 0.730，打平甚至超过更大模型——「state-externalizing harness」的新方向。</span></p>
+
+<p class="paper"><b>Kimi-Dev（Agentless Training as Skill Prior）</b>（<a href="https://arxiv.org/abs/2509.23045">2509.23045</a>，Moonshot 2025）<br>
+<code class="recipe">agentless 训练 -&gt; skill prior [单轮可验证步骤先学技能]</code><br>
+<span class="idea"><span class="p">问题</span> SWE-agent 多轮交互和 Agentless 单轮可验证两派能否统一；<span class="p">方法</span> 用 agentless 训练当「技能先验」，再喂给 SWE-agent；<span class="p">核心</span> 开源 72B、60.4% SWE-bench Verified，工作流派 SoTA——证明「先学单轮技能」是训练 coding agent 的有效配方。</span></p>
+
+<p class="paper"><b>SWE-bench Live</b>（<a href="https://arxiv.org/abs/2505.23419">2505.23419</a>，2025）<br>
+<code class="recipe">benchmark(实时) -&gt; 防数据泄露 [持续更新 issue]</code><br>
+<span class="idea"><span class="p">问题</span> SWE-bench 被刷爆、有数据泄露；<span class="p">方法</span> 持续采集新 issue，实时评测；<span class="p">核心</span> 让 coding agent 评测「活起来」，防过拟合。</span></p>
+
+<p class="paper"><b>SWE-Lancer</b>（<a href="https://arxiv.org/abs/2502.12115">2502.12115</a>，2025）<br>
+<code class="recipe">benchmark(真实经济) -&gt; 百万美元任务 [真实 freelancer 单子]</code><br>
+<span class="idea"><span class="p">问题</span> 合成/仓库 issue 之外，真实自由职业软件任务做得如何；<span class="p">方法</span> 用真实 freelancer 任务（upwork 类），按经济价值评测；<span class="p">核心</span> 把 coding agent 的经济价值量化，离真实工作更近。</span></p>
+
+<p class="paper"><b>MLGym</b>（<a href="https://arxiv.org/abs/2502.14499">2502.14499</a>，2025）<br>
+<code class="recipe">benchmark + framework -&gt; AI 科研 agent [13 个开放科研任务]</code><br>
+<span class="idea"><span class="p">问题</span> AI 做科研的 agent 怎么系统评测；<span class="p">方法</span> 13 个开放科研任务 + 统一框架；<span class="p">核心</span> 把 harness 从「写代码」扩展到「做科研」，AI Scientist 类工作的评测底座。</span></p>
+
+<h2>6. 共识与分歧（速记版）</h2>
+<p><b>共识：</b></p>
+<ol>
+<li>harness（接口/上下文/工具/循环）常常比模型本身更决定 coding agent 的成败。</li>
+<li>ACI 设计是核心杠杆：命令 + 文件编辑 + diff + 测试这套接口（SWE-agent）成为事实标准。</li>
+<li>context 管理和 compaction 是长任务的第一瓶颈（Claude Code / Codex 都把它当核心工程）。</li>
+<li>评测从静态 SWE-bench 走向 live / 真实经济任务（SWE-bench Live / SWE-Lancer），防过拟合。</li>
+<li>harness 开始和训练合流：agentless 当 skill prior（Kimi-Dev）、状态外置（Harness-1）、agent-native training。</li>
+</ol>
+<p><b>分歧 / 难点：</b></p>
+<ol>
+<li><b>多轮自主 vs 单轮流水线</b>：Agentless 证明简单流水线能打，Kimi-Dev 想把两者统一，但「什么任务值得多轮交互」仍未定。</li>
+<li><b>状态放哪</b>：把例行状态放模型（长 transcript）还是放环境（Harness-1 的外置），是 2026 的新分歧。</li>
+<li><b>harness 该进模型还是留运行时</b>：蒸馏/训练进权重（subterranean agent）vs 留运行时，边界未定。</li>
+<li><b>评测真实性</b>：SWE-bench 高分 ≠ 真实工作能力，live/经济基准更难但嘈杂，缺统一标准。</li>
+<li><b>安全</b>：sandbox、审批、间接提示注入（DeepSeek Harness 安全评估）成为 harness 的一等议题，但规范未形成。</li>
+</ol>
+
+<hr>
+<p class="note">说明：产品（Codex/Claude Code/Kimi Code/Pi/DeepSeek Harness）多为工程博客/开源仓库/系统卡，无单一 arXiv，已按官方一手来源引用；学术论文（Code as Agent Harness、From QA to Task Completion、What makes a harness、Don't Blame the LLM、Harness-1、Kimi-Dev 等）已读摘要，arXiv 号逐一核对。「pi」= earendil-works/pi（开源自扩展 agent harness），非 Inflection Pi。agentic RL（tool calling / multi-turn / 环境奖励）与本主题相邻，建议单独成篇。</p>
+
+</main>
+</body>
+</html>
