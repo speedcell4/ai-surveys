@@ -54,6 +54,44 @@
 
 反面教材（被否过的空壳）：「系统梳理了 XX」「验证了可行性」「做了系统比较」——等于什么都没说。
 
+## 示例（配方 + 一句话）
+
+几个真实条目，覆盖不同论文类型，看「产出 + 靠什么」怎么落（HTML 里箭头用 `-&gt;`）：
+
+### 学习方法 / 生成模型（pred + loss）
+
+```html
+<p class="paper"><b>JiT（Back to Basics）</b>（<a href="https://arxiv.org/abs/2511.13720">2511.13720</a>）<br>
+<code class="recipe">flow(patch + noise) -&gt; x-pred + v-loss</code><br>
+<span class="idea"><span class="p">问题</span> 高维像素空间预测噪声/速度会崩；<span class="p">方法</span> 让网络直接预测干净图 x，损失用 v-loss（把 x̂ 换算成 v̂ 再回归）；<span class="p">核心</span> 干净图在低维流形、噪声图在高维全空间，所以 x-pred 让普通 ViT + 大 patch 训得动。</span></p>
+```
+
+### 理论 / 分析（结论 + 假设 / 证明手段）
+
+```html
+<p class="paper"><b>Towards a Theory of Structure Acquisition</b>（<a href="https://arxiv.org/abs/2406.00048">2406.00048</a>）<br>
+<code class="recipe">analysis(PCFG 合成数据 + next-token) -&gt; 语法习得的理论刻画 + 训练动力学分析</code><br>
+<span class="idea"><span class="p">问题</span> DNN 学语法的理论机制是什么；<span class="p">方法</span> 在 PCFG 合成数据上分析 next-token 预测如何一步步学出语法；<span class="p">核心</span> 给出「结构如何在 DNN 中习得」的理论刻画。</span></p>
+```
+
+### 评测 / 基准（指标 + 评测协议）
+
+```html
+<p class="paper"><b>An Empirical Comparison of Unsupervised Parsing</b>（<a href="https://aclanthology.org/2020.acl-main.302/">ACL 2020</a>）<br>
+<code class="recipe">benchmark(统一重训重评 8 方法) -&gt; F1 + 统一协议</code><br>
+<span class="idea"><span class="p">问题</span> 各方法用不同树库/评估、数字不可比；<span class="p">方法</span> 统一在 PTB 重训重评；<span class="p">核心</span> 给出第一个可比排行榜，暴露 F1 虚高来自评估差异。</span></p>
+```
+
+### 数据集（内容 + 采集 / 许可）
+
+```html
+<p class="paper"><b>ImageNet</b>（Deng et al. 2009）<br>
+<code class="recipe">dataset(自然图像) -&gt; 1000 类千万级标注 + WordNet 层级 / 众包清洗</code><br>
+<span class="idea"><span class="p">问题</span> 缺一个足够大、类别清晰的图像基准；<span class="p">方法</span> 用 WordNet 层级组织、众包清洗出千万级标注图；<span class="p">核心</span> 成为 CV 深度学习的通用基准。</span></p>
+```
+
+> 看共性：`-&gt;` 左边是研究对象/方法，右边第一段是「产出/结论」，`+` 后是「靠什么做到/怎么验证」——两部分缺一不可，这就是「配方」要保证的信息完整性。
+
 ## 数据空间 / 结构记法
 
 - **数据在哪个空间**：写清方法直接在原始输入上做，还是先过某种编码/压缩。例：有 VAE 就写 `vae(patch)`，没有就写 `patch`；句法里写 `sentence` / `pos-seq`。
