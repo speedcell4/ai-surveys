@@ -34,10 +34,26 @@ hr { border:none; border-top:1px solid var(--border); margin:2.2em 0; }
 ol,ul { padding-left:1.5em; }
 li { margin:.35em 0; }
 @media (max-width:640px){ .container{padding:28px 16px 64px;} body{font-size:15px;} }
+
+.lvbar { position:sticky; top:0; z-index:10; background:#fff; border-bottom:1px solid var(--border); padding:8px 0 10px; margin:0 0 18px; display:flex; align-items:center; gap:8px; }
+.lvlabel { font-size:.85em; color:var(--muted); margin-right:2px; }
+.lvbtn { font-size:.85em; border:1px solid var(--border); background:#fff; color:var(--muted); border-radius:999px; padding:3px 14px; cursor:pointer; }
+.lvbtn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+body.lv1 .paper { display:none; }
+body.lv1 .deep .paper { display:block; }
+body.lv1 .note, body.lv2 .note { display:none; }
 </style>
 </head>
 <body>
 <main class="container">
+
+<div class="lvbar">
+  <span class="lvlabel">阅读深度</span>
+  <button class="lvbtn" data-lv="1">脉络</button>
+  <button class="lvbtn active" data-lv="2">完整</button>
+  <button class="lvbtn" data-lv="3">深读</button>
+</div>
+
 
 <h1>LLM 强化学习速览（RL for LLMs，2017 ~ 2026）</h1>
 <p class="sub">GRPO → GSPO / GEPO → DAPO 这条线 + credit assignment + on-policy 蒸馏（OPD/OPSD/MOPD）· 挑重点：节点性文章 + 知名 repo 已实现的算法 · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话</p>
@@ -205,5 +221,19 @@ li { margin:.35em 0; }
 <p class="note">说明：点名线（GRPO/GSPO/GEPO/DAPO）、credit assignment（PRM/VinePPO/PRIME/DelTA）、OPD/OPSD/MOPD 已读摘要/方法，arXiv 号均逐一核对。挑选标准：节点性文章（PPO/RLHF/DPO/GRPO/DAPO/R1）+ 知名 repo（verl/TRL）已实现的算法（RLOO/GRPO/DAPO/GSPO）。agentic RL（tool calling、multi-turn、环境奖励）与本领域高度重合但重心在「轨迹/环境设计」而非「策略优化算法」，建议单独成篇。</p>
 
 </main>
+
+<script>
+(function(){
+  var btns = Array.prototype.slice.call(document.querySelectorAll('.lvbtn'));
+  function setLv(lv){
+    document.body.classList.remove('lv1','lv2','lv3');
+    document.body.classList.add('lv'+lv);
+    btns.forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-lv')===lv); });
+  }
+  btns.forEach(function(b){ b.addEventListener('click', function(){ setLv(b.getAttribute('data-lv')); }); });
+  setLv('2');
+})();
+</script>
+
 </body>
 </html>

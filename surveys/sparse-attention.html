@@ -34,10 +34,26 @@ hr { border:none; border-top:1px solid var(--border); margin:2.2em 0; }
 ol,ul { padding-left:1.5em; }
 li { margin:.35em 0; }
 @media (max-width:640px){ .container{padding:28px 16px 64px;} body{font-size:15px;} }
+
+.lvbar { position:sticky; top:0; z-index:10; background:#fff; border-bottom:1px solid var(--border); padding:8px 0 10px; margin:0 0 18px; display:flex; align-items:center; gap:8px; }
+.lvlabel { font-size:.85em; color:var(--muted); margin-right:2px; }
+.lvbtn { font-size:.85em; border:1px solid var(--border); background:#fff; color:var(--muted); border-radius:999px; padding:3px 14px; cursor:pointer; }
+.lvbtn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+body.lv1 .paper { display:none; }
+body.lv1 .deep .paper { display:block; }
+body.lv1 .note, body.lv2 .note { display:none; }
 </style>
 </head>
 <body>
 <main class="container">
+
+<div class="lvbar">
+  <span class="lvlabel">阅读深度</span>
+  <button class="lvbtn" data-lv="1">脉络</button>
+  <button class="lvbtn active" data-lv="2">完整</button>
+  <button class="lvbtn" data-lv="3">深读</button>
+</div>
+
 
 <h1>稀疏注意力速览（Sparse Attention，2019 ~ 2026）</h1>
 <p class="sub">保留精确注意力、只算「选中的」token 对——核心问题是<b>选 block 还是选 token、怎么选</b> · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话（问题 / 方法 / 核心）</p>
@@ -181,5 +197,19 @@ li { margin:.35em 0; }
 <p class="note">说明：DeepSeek 谱系（NSA 2502.11089、DSA/V3.2 2512.02556、CSA+HCA/V4 2606.19348）已读原文/技术报告；其余论文摘要/标题经核实，arXiv 号均逐一核对。早期稀疏（Sparse Transformer 等）与 hardware 视角（FlashAttention/PagedAttention）的更完整展开见 <a href="long-context.html">long-context.html</a>；线性注意力那条路见 <a href="linear-attention.html">linear-attention.html</a>。</p>
 
 </main>
+
+<script>
+(function(){
+  var btns = Array.prototype.slice.call(document.querySelectorAll('.lvbtn'));
+  function setLv(lv){
+    document.body.classList.remove('lv1','lv2','lv3');
+    document.body.classList.add('lv'+lv);
+    btns.forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-lv')===lv); });
+  }
+  btns.forEach(function(b){ b.addEventListener('click', function(){ setLv(b.getAttribute('data-lv')); }); });
+  setLv('2');
+})();
+</script>
+
 </body>
 </html>
