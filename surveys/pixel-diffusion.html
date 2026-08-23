@@ -265,8 +265,8 @@ window.MathJax = {
 <p class="trend">除了改架构，还有人从训练本身下手：表示对齐、register、自引导、缩放律，各自补一个像素扩散的短板。</p>
 
 <p class="paper"><b>PixelREPA（KAIST）</b>（<a href="https://arxiv.org/abs/2603.14366">2603.14366</a>）<br>
-<code class="recipe">flow(patch + noise) -&gt; x-pred + v-loss + PixelREPA 对齐</code><br>
-<span class="idea"><span class="p">问题</span> REPA 表示对齐在像素 DiT 上失效；<span class="p">方法</span> 修正信息不对称的对齐；<span class="p">核心</span> 修好像素空间里的表示对齐。</span></p>
+<code class="recipe">flow(patch + noise) -&gt; x-pred + v-loss + cos(mta(h_t, mask), dino(x).detach())</code><br>
+<span class="idea"><span class="p">问题</span> 原版 REPA 的 patch 级 MLP 直接回归会撞上「像素空间自由度高、DINO 目标压缩低」的信息不对称，导致 feature hacking、多样性崩；<span class="p">方法</span> 把 MLP 换成带随机 token mask 的浅层 Transformer adapter（MTA）：先对中间表示 $h_t$ 做上下文聚合，再和冻结 DINO 对干净图 $x$ 的 patch 特征做余弦相似度；<span class="p">核心</span> 用 mask 把像素侧自由度压下来、逼 adapter 做 contextual prediction，而不是逐 token 走捷径。</span></p>
 
 <p class="paper"><b>Registers Matter for pDiT</b>（<a href="https://arxiv.org/abs/2605.16147">2605.16147</a>）<br>
 <code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss + Register Guidance</code><br>
@@ -283,8 +283,8 @@ window.MathJax = {
 </div>
 
 <p class="paper"><b>REPA（Representation Alignment for Generation）</b>（<a href="https://arxiv.org/abs/2410.06940">2410.06940</a>）<br>
-<code class="recipe">flow(A + noise) -&gt; v-pred + 表示对齐 loss（对齐 DINO 表示）</code><br>
-<span class="idea"><span class="p">问题</span> DiT 训练难、收敛慢；<span class="p">方法</span> 把去噪中间表示对齐到预训练视觉编码器（DINO）的表示；<span class="p">核心</span> 表示对齐让 DiT 训练快 17.5×、质量更好——PixelREPA 的源头。</span></p>
+<code class="recipe">flow(A + noise) -&gt; v-pred + cos(h_phi(h_t), dino(x).detach())</code><br>
+<span class="idea"><span class="p">问题</span> DiT 训练难、收敛慢；<span class="p">方法</span> 把去噪网络中间表示 $h_t$ 用可训练 MLP $h_\phi$ 投影，再与冻结 DINO 对干净图 $x$ 的 patch 特征做余弦相似度最大化；<span class="p">核心</span> 表示对齐让 DiT 训练快 17.5×、质量更好——PixelREPA 的源头。</span></p>
 
 <h3>2.7 像素解码器（VAE 降级 / 删除）</h3>
 <p class="trend">一条更保守的路线：不删整个 VAE，只把最后「latent → 像素」的解码器换成像素扩散，既保留 latent 的高效又补回细节。</p>
