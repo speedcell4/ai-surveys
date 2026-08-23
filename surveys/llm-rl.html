@@ -26,7 +26,7 @@ window.MathJax = {
 
 
 <h1>LLM 强化学习速览（RL for LLMs，2017 ~ 2026）</h1>
-<p class="sub">GRPO → GSPO / GEPO → DAPO 这条线 + credit assignment + on-policy 蒸馏（OPD/OPSD/MOPD）· 挑重点：节点性文章 + 知名 repo 已实现的算法 · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话</p>
+<p class="sub">GRPO → GSPO / GEPO → DAPO 这条线 + credit assignment + on-policy 蒸馏（GKD/SDPO/SDFT/OPD/OPSD/MOPD）· 挑重点：节点性文章 + 知名 repo 已实现的算法 · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话</p>
 
 <h2>0. 记法（这个领域的「最大公约数」）</h2>
 <p>LLM 强化学习的核心问题只有两个：<b>用什么信号</b>（奖励从哪来）和<b>把信号分给谁</b>（credit assignment）。所有算法都在回答「advantage 怎么算、奖励/优势分到 response 级还是 token 级」。配方围绕这两轴：</p>
@@ -39,27 +39,27 @@ window.MathJax = {
 <tr><td><code>clip / KL</code></td><td>信任域：clip 比例限制更新幅度 / KL 惩罚保持离参考策略不远</td></tr>
 <tr><td><code>orm / prm</code></td><td>结果奖励（outcome）/ 过程奖励（process），后者给 token 级监督</td></tr>
 <tr><td><code>credit</code></td><td>credit assignment：奖励/优势分到 response 级还是 token 级</td></tr>
-<tr><td><code>on-policy distill</code></td><td>on-policy 蒸馏：在 student 自己采的 rollout 上做 token 级蒸馏（OPD/OPSD/MOPD）</td></tr>
+<tr><td><code>on-policy distill</code></td><td>on-policy 蒸馏：在 student 自己采的 rollout 上做 token 级蒸馏（GKD/SDPO/SDFT/OPD/OPSD/MOPD）</td></tr>
 </table>
 <p>配方格式：<code>算法 -&gt; 优化目标 + advantage/credit 来源</code>。例：<code>GRPO: critic-free group -&gt; 组内标准化 advantage + clip [无 value model]</code>。</p>
-<blockquote>一句话主线：<b>PPO 需要价值模型（贵）→ GRPO 用「同 prompt 采一组、组内比」甩掉价值模型（DeepSeek-R1 用）→ DAPO/GSPO/GEPO 修 GRPO 的 clip、长度偏置、credit → 最近 OPD/OPSD/MOPD 干脆不用 RL 信号、改用「强 teacher 的 token 级蒸馏」</b>。信号从「人类偏好」一路走到「可验证奖励」再到「teacher 分布」。</blockquote>
+<blockquote>一句话主线：<b>PPO 需要价值模型（贵）→ GRPO 用「同 prompt 采一组、组内比」甩掉价值模型（DeepSeek-R1 用）→ DAPO/GSPO/GEPO 修 GRPO 的 clip、长度偏置、credit → 最近 GKD/SDPO/SDFT/OPD/OPSD/MOPD 干脆不用 RL 信号、改用「强 teacher 的 token 级蒸馏」</b>。信号从「人类偏好」一路走到「可验证奖励」再到「teacher 分布」。</blockquote>
 
 <h2>1. 主线：信号来源的三次迁移</h2>
 <ol>
 <li><b>人类偏好（2017-2022）</b>：PPO + 奖励模型（RLHF/InstructGPT），DPO 把「先学奖励再优化」合成一步。</li>
 <li><b>可验证奖励 + 组内相对（2024-2025）</b>：GRPO 用「同 prompt 采一组、组内标准化」甩掉价值模型，配可验证奖励（代码能跑/答案可判），DeepSeek-R1 引爆推理 RL。</li>
 <li><b>修 GRPO + token 级 credit（2025）</b>：DAPO 修 clip/采样/长度、GSPO 修序列级 credit、GEPO 修熵、VinePPO/PRIME 把 credit 做到 token 级。</li>
-<li><b>teacher 分布（2026）</b>：OPD/OPSD/MOPD 用「强 teacher 的 token 级分布」当监督，在 student 自己的 rollout 上蒸馏，信号从「奖励标量」变成「稠密 token 监督」。</li>
+<li><b>teacher 分布（2023–2026）</b>：GKD/SDPO/SDFT/OPD/OPSD/MOPD 用「teacher 或自我 teacher 的 token 级分布」当监督，在 student 自己的 rollout 上蒸馏，信号从「奖励标量」变成「稠密 token 监督」。</li>
 </ol>
 <p>一条主轴：<b>信号从「稀疏标量奖励」走向「稠密 token 级监督」</b>，credit assignment 从 response 级走向 token 级。交点是一个开放问题：<b>奖励越稠密越容易训，但「过程对错」本身难定义，PRM 和 on-policy 蒸馏在争「谁给 token 级信号」。</b></p>
 
 <h2>2. 先读这两篇（综述）</h2>
-<p class="trend">按规范先读 survey。一篇给 on-policy 蒸馏（OPD/OPSD/MOPD）的统一框架，一篇给 credit assignment 的完整地图。</p>
+<p class="trend">按规范先读 survey。一篇给 on-policy 蒸馏（GKD/SDPO/SDFT/OPD/OPSD/MOPD）的统一框架，一篇给 credit assignment 的完整地图。</p>
 
 <div class="deep">
 <p class="paper"><b>A Survey of On-Policy Distillation for LLMs</b>（<a href="https://arxiv.org/abs/2604.00626">2604.00626</a>，2026）<br>
 <code class="recipe">survey(OPD) -&gt; f-散度统一框架 + 三维分类 [信号 / teacher 访问 / 损失粒度]</code><br>
-<span class="idea"><span class="p">问题</span> OPD/OPSD/MOPD 一堆变体、缺统一视角；<span class="p">方法</span> 用 f-散度把 on-policy 蒸馏统一，按「反馈信号（logit/outcome/偏好）、teacher 访问（白盒/黑盒）、损失粒度（response/token）」三维分类；<span class="p">核心</span> 这张「Awesome-LLM-On-Policy-Distillation」树的母论文，是 OPD 线的地图。</span></p>
+<span class="idea"><span class="p">问题</span> GKD/SDPO/SDFT/OPD/OPSD/MOPD 一堆变体、缺统一视角；<span class="p">方法</span> 用 f-散度把 on-policy 蒸馏统一，按「反馈信号（logit/outcome/偏好）、teacher 访问（白盒/黑盒）、损失粒度（response/token）」三维分类；<span class="p">核心</span> 这张「Awesome-LLM-On-Policy-Distillation」树的母论文，是 OPD 线的地图。</span></p>
 </div>
 
 <h2>3. 奠基（PPO → RLHF → DPO → RLOO）</h2>
@@ -142,8 +142,22 @@ window.MathJax = {
 <code class="recipe">credit(判别式 token) -&gt; 可验证奖励的 token 级 credit [判别哪些 token 关键]</code><br>
 <span class="idea"><span class="p">问题</span> 可验证奖励只有结果对/错，怎么分到 token；<span class="p">方法</span> 判别式地给 token 分配 credit（区分哪些 token 对最终对错有贡献）；<span class="p">核心</span> 2026 年 credit assignment 的最新代表作，回应「token 级 credit」这条线。</span></p>
 
-<h2>7. On-policy 蒸馏（OPD / OPSD / MOPD）</h2>
-<p class="trend">最新一波（2026）干脆换信号：不用「奖励标量」，改用「强 teacher 在 student 自己 rollout 上的 token 级分布」当监督。OPSD 让同一个模型既当 teacher 又当 student，OPD 修它的训练坑，MOPD 用多个领域 teacher 把能力「在策略空间」整合（DeepSeek-V4、MiMo-V2 都在用）。这波把 LLM 后训练从「RL 优化奖励」推向「on-policy 蒸馏」。</p>
+<h2>7. On-policy 蒸馏（GKD → SDPO / SDFT / OPSD / OPD / MOPD）</h2>
+<p class="trend">这条线从 GKD 开始：别在 teacher 的静态分布上蒸馏，改在 student 自己生成的 rollout 上用 teacher 反馈。最新一波（2026）再把 teacher 换成「模型自己」或「多个领域 teacher」：SDPO 把 RL 的反馈条件 self-teacher 蒸馏回策略，SDFT 用 in-context 示范让模型边学新任务边不遗忘旧技能，OPSD 用特权上下文做自我蒸馏，OPD 解释它到底为什么成立、OPD 也暴露长程 scale 的坑，MOPD 用多个领域 teacher 在策略空间整合能力（DeepSeek-V4、MiMo-V2 都在用）。这波把 LLM 后训练从「RL 优化奖励」推向「on-policy 蒸馏」。</p>
+
+<div class="deep">
+<p class="paper"><b>GKD（Generalized Knowledge Distillation / On-Policy Distillation）</b>（<a href="https://arxiv.org/abs/2306.13649">2306.13649</a>，Agarwal et al. 2024，ICLR）<br>
+<code class="recipe">on-policy distill(self-generated) -&gt; 学习信号 [teacher 在 student 采样上的反馈 + 灵活散度]</code><br>
+<span class="idea"><span class="p">问题</span> 自回归模型的 KD 有 train/inference 分布不一致；<span class="p">方法</span> student 先自己生成序列，teacher 在这些序列上给反馈，再拿「student 分布 vs teacher 反馈」的散度训练，还能接进 RLHF；<span class="p">核心</span> on-policy 蒸馏的地基，OPD/OPSD 都是从这里长出来的。</span></p>
+</div>
+
+<p class="paper"><b>SDPO（Reinforcement Learning via Self-Distillation / Self-Distillation Policy Optimization）</b>（<a href="https://arxiv.org/abs/2601.20802">2601.20802</a>，Hübottner et al. 2026）<br>
+<code class="recipe">rl(feedback) -&gt; token 级自我蒸馏目标 [feedback 条件当前模型当 self-teacher]</code><br>
+<span class="idea"><span class="p">问题</span> RLVR 每次 attempt 只有一个标量结果奖励，credit assignment 卡住；<span class="p">方法</span> 把「RL + 富反馈」形式化，让「以反馈为条件的当前模型」当 self-teacher，把它的 feedback-informed 下一个 token 预测蒸馏回 policy；<span class="p">核心</span> 科学推理 / 工具使用 / LiveCodeBench v6 上采样效率和最终准确都更好；只有标量奖励的环境也能用成功 rollout 给失败 rollout 当隐式反馈，test-time 用能 3 倍 fewer attempts 复现 best-of-k。</span></p>
+
+<p class="paper"><b>SDFT（Self-Distillation Enables Continual Learning）</b>（<a href="https://arxiv.org/abs/2601.19897">2601.19897</a>，Shenfeld et al. 2026）<br>
+<code class="recipe">sft + on-policy self-distill -&gt; 新任务准确 + 少遗忘 [demonstration 条件模型当自己的 teacher]</code><br>
+<span class="idea"><span class="p">问题</span> 持续学习里不能一边学新技能一边忘旧技能，普通 SFT 又是 off-policy；<span class="p">方法</span> 用「以 demonstration 为条件的模型」当自己的 teacher，靠 in-context learning 产生 on-policy 信号做 self-distillation；<span class="p">核心</span> 比 SFT 的新任务准确更高、灾难性遗忘更少，顺序学多个技能能累积而不回退。</span></p>
 
 <div class="deep">
 <p class="paper"><b>OPSD（Self-Distilled Reasoner: On-Policy Self-Distillation）</b>（<a href="https://arxiv.org/abs/2601.18734">2601.18734</a>，Zhao et al. 2026）<br>
@@ -153,8 +167,8 @@ window.MathJax = {
 
 <div class="deep">
 <p class="paper"><b>OPD（Rethinking On-Policy Distillation）</b>（<a href="https://arxiv.org/abs/2604.13016">2604.13016</a>，Li et al. 2026）<br>
-<code class="recipe">on-policy distill -&gt; 训练坑 + 配方 [top-K 支持匹配 + 截断 reverse-KL]</code><br>
-<span class="idea"><span class="p">问题</span> sampled-token OPD 训练动力学没搞清、实际不好训；<span class="p">方法</span> 识别三种失败模式（token 级监督不平衡、teacher 对学生前缀指导不可靠、tokenizer 不匹配），给 teacher top-K 支持匹配 + 截断 reverse-KL 等修复；<span class="p">核心</span> 把 OPD 从「看着好」变成「真能训」，是 OPD 工程化的关键。</span></p>
+<code class="recipe">on-policy distill -&gt; 成功条件 + 训练修复 [学生状态上的高概率 token 对齐 + cold start / prompt 选择]</code><br>
+<span class="idea"><span class="p">问题</span> on-policy 蒸馏什么条件下才真正成功、为什么实际训不稳；<span class="p">方法</span> 指出两个成功条件——student 与 teacher 的思考模式兼容、teacher 必须提供学生没有的新知识；发现同族 1.5B / 7B 弱到强反向蒸馏里，teacher 从学生视角分布不可区分，成功 OPD 靠学生在访问状态上对高概率 token 渐进对齐（少量共享 token 占 97–99% 概率）；<span class="p">核心</span> 给出 off-policy cold start 与 teacher-aligned prompt selection 两个修复；但稠密 token 奖励随轨迹深度退化，长程 scale 仍是开放问题。</span></p>
 </div>
 
 <div class="deep">
@@ -176,7 +190,7 @@ window.MathJax = {
 <li>critic-free 的 group 方法（GRPO/DAPO）已成为推理 RL 的事实标准，价值模型基本被甩掉。</li>
 <li>可验证奖励（代码/数学）是最可靠的 RL 信号，R1/k1.5 靠它 scale。</li>
 <li>credit assignment 从 response 级走向 token 级是大方向（GSPO/VinePPO/PRIME/DelTA）。</li>
-<li>2026 起 on-policy 蒸馏（OPD/OPSD/MOPD）成为后训练新范式，被 DeepSeek-V4 等旗舰采用。</li>
+<li>2026 起 on-policy 蒸馏（GKD/SDPO/SDFT/OPD/OPSD/MOPD）成为后训练新范式，被 DeepSeek-V4 等旗舰采用。</li>
 </ol>
 <p><b>分歧 / 难点：</b></p>
 <ol>
@@ -188,7 +202,7 @@ window.MathJax = {
 </ol>
 
 <hr>
-<p class="note">说明：点名线（GRPO/GSPO/GEPO/DAPO）、credit assignment（PRM/VinePPO/PRIME/DelTA）、OPD/OPSD/MOPD 已读摘要/方法，arXiv 号均逐一核对。挑选标准：节点性文章（PPO/RLHF/DPO/GRPO/DAPO/R1）+ 知名 repo（verl/TRL）已实现的算法（RLOO/GRPO/DAPO/GSPO）。agentic RL（tool calling、multi-turn、环境奖励）与本领域高度重合但重心在「轨迹/环境设计」而非「策略优化算法」，建议单独成篇。</p>
+<p class="note">说明：点名线（GRPO/GSPO/GEPO/DAPO）、credit assignment（PRM/VinePPO/PRIME/DelTA）、GKD/SDPO/SDFT/OPD/OPSD/MOPD 已读摘要/方法，arXiv 号均逐一核对。挑选标准：节点性文章（PPO/RLHF/DPO/GRPO/DAPO/R1）+ 知名 repo（verl/TRL）已实现的算法（RLOO/GRPO/DAPO/GSPO）。agentic RL（tool calling、multi-turn、环境奖励）与本领域高度重合但重心在「轨迹/环境设计」而非「策略优化算法」，建议单独成篇。</p>
 
 </main>
 

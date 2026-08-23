@@ -9,7 +9,7 @@
 - [线性注意力速览](surveys/linear-attention.html) — kernel 线性 / SSM / delta / TTT / Titans + Qwen3-Next、Kimi K3 混合旗舰 + RWKV / fla 算法谱系，2020 ~ 2026，59 篇
 - [稀疏注意力速览](surveys/sparse-attention.html) — 选 block 还是选 token + DeepSeek NSA/DSA/CSA/HCA + 厂商落地，2019 ~ 2026，26 篇
 - [递归自我改进速览](surveys/recursive-self-improvement.html) — 自训练 / 自奖励 / 自博弈 / 自纠正 / 弱到强 + AI Scientist、AlphaEvolve，2003 ~ 2026，27 篇
-- [LLM 强化学习速览](surveys/llm-rl.html) — GRPO → GSPO/GEPO → DAPO + credit assignment + OPD/OPSD/MOPD，2017 ~ 2026，20 篇
+- [LLM 强化学习速览](surveys/llm-rl.html) — GRPO → GSPO/GEPO → DAPO + credit assignment + GKD/OPD/OPSD/MOPD，2017 ~ 2026，23 篇
 - [Agent Harness 速览](surveys/agent-harness.html) — Codex / Claude Code / Kimi Code / Pi / DeepSeek + SWE-agent、Harness-1 等，2023 ~ 2026，19 篇
 
 > 新增论文/续写速览前，先读 [AGENTS.md](AGENTS.md)，里面是这套「配方 + 一句话」格式的完整规范。
