@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM 强化学习速览</title>
+<style>
+:root { --accent:#1d4ed8; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#eff6ff; }
+* { box-sizing: border-box; }
+body { margin:0; background:#fafafa; color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  line-height:1.75; font-size:16px; }
+.container { max-width:940px; margin:0 auto; padding:44px 28px 96px; background:#fff; box-shadow:0 0 0 1px var(--border); min-height:100vh; }
+h1 { font-size:1.75em; line-height:1.35; border-bottom:2px solid var(--accent); padding-bottom:.4em; margin:.1em 0 .2em; }
+.sub { color:var(--muted); margin-top:0; }
+h2 { font-size:1.32em; margin-top:2.2em; border-bottom:1px solid var(--border); padding-bottom:.3em; }
+h3 { font-size:1.1em; margin-top:1.8em; color:#111827; }
+a { color:var(--accent); text-decoration:none; }
+a:hover { text-decoration:underline; }
+table { width:100%; border-collapse:collapse; margin:1.2em 0; font-size:.94em; }
+th,td { border:1px solid var(--border); padding:.5em .75em; text-align:left; vertical-align:top; }
+th { background:#eff6ff; }
+tr:nth-child(even) td { background:#fafafa; }
+blockquote { border-left:4px solid var(--accent); margin:1.2em 0; padding:.5em 1em; background:var(--bg); color:#374151; border-radius:0 6px 6px 0; }
+.paper { margin:1.25em 0; }
+.paper b { color:#111827; }
+code.recipe { display:inline-block; margin:.4em 0; background:var(--bg); border-left:3px solid var(--accent); padding:.34em .72em; border-radius:5px; font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:.9em; color:#111827; }
+.idea { color:#374151; }
+.idea .p { color:#b91c1c; font-weight:600; }
+.trend { color:#374151; background:#eff6ff; border-left:3px solid #1d4ed8; padding:.55em .85em; border-radius:5px; margin:.55em 0 1.1em; }
+.deep { background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:.1em 1em .5em; margin:1em 0; }
+hr { border:none; border-top:1px solid var(--border); margin:2.2em 0; }
+.note { color:var(--muted); font-size:.9em; }
+ol,ul { padding-left:1.5em; }
+li { margin:.35em 0; }
+@media (max-width:640px){ .container{padding:28px 16px 64px;} body{font-size:15px;} }
+</style>
+</head>
+<body>
+<main class="container">
+
+<h1>LLM 强化学习速览（RL for LLMs，2017 ~ 2026）</h1>
+<p class="sub">GRPO → GSPO / GEPO → DAPO 这条线 + credit assignment + on-policy 蒸馏（OPD/OPSD/MOPD）· 挑重点：节点性文章 + 知名 repo 已实现的算法 · 检索时间 2026-08-23 · 每篇 = 配方 + 一句话</p>
+
+<h2>0. 记法（这个领域的「最大公约数」）</h2>
+<p>LLM 强化学习的核心问题只有两个：<b>用什么信号</b>（奖励从哪来）和<b>把信号分给谁</b>（credit assignment）。所有算法都在回答「advantage 怎么算、奖励/优势分到 response 级还是 token 级」。配方围绕这两轴：</p>
+<table>
+<tr><th>记号</th><th>意思</th></tr>
+<tr><td><code>pg / advantage</code></td><td>策略梯度 / 优势函数 A（这个动作比平均好多少）</td></tr>
+<tr><td><code>critic</code></td><td>价值模型 V，用来估 baseline / 优势（PPO 用）</td></tr>
+<tr><td><code>critic-free</code></td><td>不要价值模型（GRPO/RLOO/DAPO），省训练开销</td></tr>
+<tr><td><code>group</code></td><td>组内相对：同 prompt 采样一组，用组内均值/方差归一化 advantage</td></tr>
+<tr><td><code>clip / KL</code></td><td>信任域：clip 比例限制更新幅度 / KL 惩罚保持离参考策略不远</td></tr>
+<tr><td><code>orm / prm</code></td><td>结果奖励（outcome）/ 过程奖励（process），后者给 token 级监督</td></tr>
+<tr><td><code>credit</code></td><td>credit assignment：奖励/优势分到 response 级还是 token 级</td></tr>
+<tr><td><code>on-policy distill</code></td><td>on-policy 蒸馏：在 student 自己采的 rollout 上做 token 级蒸馏（OPD/OPSD/MOPD）</td></tr>
+</table>
+<p>配方格式：<code>算法 -&gt; 优化目标 + advantage/credit 来源</code>。例：<code>GRPO: critic-free group -&gt; 组内标准化 advantage + clip [无 value model]</code>。</p>
+<blockquote>一句话主线：<b>PPO 需要价值模型（贵）→ GRPO 用「同 prompt 采一组、组内比」甩掉价值模型（DeepSeek-R1 用）→ DAPO/GSPO/GEPO 修 GRPO 的 clip、长度偏置、credit → 最近 OPD/OPSD/MOPD 干脆不用 RL 信号、改用「强 teacher 的 token 级蒸馏」</b>。信号从「人类偏好」一路走到「可验证奖励」再到「teacher 分布」。</blockquote>
+
+<h2>1. 主线：信号来源的三次迁移</h2>
+<ol>
+<li><b>人类偏好（2017-2022）</b>：PPO + 奖励模型（RLHF/InstructGPT），DPO 把「先学奖励再优化」合成一步。</li>
+<li><b>可验证奖励 + 组内相对（2024-2025）</b>：GRPO 用「同 prompt 采一组、组内标准化」甩掉价值模型，配可验证奖励（代码能跑/答案可判），DeepSeek-R1 引爆推理 RL。</li>
+<li><b>修 GRPO + token 级 credit（2025）</b>：DAPO 修 clip/采样/长度、GSPO 修序列级 credit、GEPO 修熵、VinePPO/PRIME 把 credit 做到 token 级。</li>
+<li><b>teacher 分布（2026）</b>：OPD/OPSD/MOPD 用「强 teacher 的 token 级分布」当监督，在 student 自己的 rollout 上蒸馏，信号从「奖励标量」变成「稠密 token 监督」。</li>
+</ol>
+<p>一条主轴：<b>信号从「稀疏标量奖励」走向「稠密 token 级监督」</b>，credit assignment 从 response 级走向 token 级。交点是一个开放问题：<b>奖励越稠密越容易训，但「过程对错」本身难定义，PRM 和 on-policy 蒸馏在争「谁给 token 级信号」。</b></p>
+
+<h2>2. 先读这两篇（综述）</h2>
+<p class="trend">按规范先读 survey。一篇给 on-policy 蒸馏（OPD/OPSD/MOPD）的统一框架，一篇给 credit assignment 的完整地图。</p>
+
+<div class="deep">
+<p class="paper"><b>A Survey of On-Policy Distillation for LLMs</b>（<a href="https://arxiv.org/abs/2604.00626">2604.00626</a>，2026）<br>
+<code class="recipe">survey(OPD) -&gt; f-散度统一框架 + 三维分类 [信号 / teacher 访问 / 损失粒度]</code><br>
+<span class="idea"><span class="p">问题</span> OPD/OPSD/MOPD 一堆变体、缺统一视角；<span class="p">方法</span> 用 f-散度把 on-policy 蒸馏统一，按「反馈信号（logit/outcome/偏好）、teacher 访问（白盒/黑盒）、损失粒度（response/token）」三维分类；<span class="p">核心</span> 这张「Awesome-LLM-On-Policy-Distillation」树的母论文，是 OPD 线的地图。</span></p>
+</div>
+
+<h2>3. 奠基（PPO → RLHF → DPO → RLOO）</h2>
+<p class="trend">RL 用于语言模型的四个地基：PPO 给 clip 信任域、RLHF 给「奖励模型 + 人类偏好」范式、DPO 把奖励隐式化、RLOO 证明「不要价值模型也能行」——后者是 GRPO 的前奏。</p>
+
+<p class="paper"><b>PPO（Proximal Policy Optimization）</b>（<a href="https://arxiv.org/abs/1707.06347">1707.06347</a>，Schulman et al. 2017）<br>
+<code class="recipe">pg + clip -&gt; 稳定策略更新 [clip 信任域 + 价值模型 baseline]</code><br>
+<span class="idea"><span class="p">问题</span> 策略梯度更新步长难控、易崩；<span class="p">方法</span> 用 clip 把更新限制在信任域内，配价值模型估 advantage；<span class="p">核心</span> 事实标准的 RL 算法，LLM RL 的起点。</span></p>
+
+<p class="paper"><b>InstructGPT / RLHF</b>（<a href="https://arxiv.org/abs/2203.02155">2203.02155</a>，Ouyang et al. 2022，OpenAI）<br>
+<code class="recipe">sft → rm → ppo -&gt; 对齐人类意图 [人类偏好奖励模型]</code><br>
+<span class="idea"><span class="p">问题</span> 语言模型没对齐用户意图；<span class="p">方法</span> 三段式：SFT → 训奖励模型（人类偏好排序）→ PPO 优化；<span class="p">核心</span> 确立「RLHF」范式，ChatGPT 的底座。</span></p>
+
+<p class="paper"><b>DPO（Direct Preference Optimization）</b>（<a href="https://arxiv.org/abs/2305.18290">2305.18290</a>，Rafailov et al. 2023）<br>
+<code class="recipe">dpo -&gt; 免奖励模型对齐 [隐式奖励 = β·log(π/π_ref)]</code><br>
+<span class="idea"><span class="p">问题</span> RLHF 要单独训奖励模型、再 RL，麻烦且不稳；<span class="p">方法</span> 把奖励模型「隐式化」成 β·log(π/π_ref)，直接从偏好对做分类式优化；<span class="p">核心</span> 免奖励模型、免 RL 的对齐范式，是后续自奖励/偏好优化一系列工作的底座。</span></p>
+
+<p class="paper"><b>RLOO（REINFORCE Leave-One-Out）</b>（<a href="https://arxiv.org/abs/2402.14740">2402.14740</a>，Ahmadian et al. 2024）<br>
+<code class="recipe">pg(leave-one-out) -&gt; 免价值模型 [同组其余样本当 baseline]</code><br>
+<span class="idea"><span class="p">问题</span> 一定要价值模型吗；<span class="p">方法</span> 用「组内其余样本的均值」当 baseline，做 REINFORCE，无价值模型、无偏；<span class="p">核心</span> 证明 critic-free 也能追平 PPO，是 GRPO 的直接前奏（TRL 已实现）。</span></p>
+
+<h2>4. GRPO 这条线（critic-free 的主流）</h2>
+<p class="trend">GRPO 用「同 prompt 采一组、组内标准化 advantage」彻底甩掉价值模型，配可验证奖励，成为 DeepSeek-R1 的引擎。之后的 DAPO/GSPO/GEPO 都在修它：clip 不对称、长度偏置、序列级 credit、熵控制。这节是当前 LLM RL 的主干，绝大多数已进 verl/TRL。</p>
+
+<div class="deep">
+<p class="paper"><b>GRPO（Group Relative Policy Optimization，DeepSeekMath）</b>（<a href="https://arxiv.org/abs/2402.03300">2402.03300</a>，Shao et al. 2024）<br>
+<code class="recipe">critic-free group -&gt; 组内标准化 advantage + clip [无价值模型]</code><br>
+<span class="idea"><span class="p">问题</span> PPO 的价值模型和策略同规模、训练开销翻倍；<span class="p">方法</span> 对每个 prompt 采样一组输出，用组内奖励的均值/标准差做相对优势，只更新策略、不训价值模型；<span class="p">核心</span> 「组内相对」范式，DeepSeek-R1 的核心引擎，verl/TRL 都已实现——是这条线的起点。</span></p>
+</div>
+
+<p class="paper"><b>Dr. GRPO（Understanding R1-Zero-Like Training）</b>（<a href="https://arxiv.org/abs/2503.20783">2503.20783</a>，Liu et al. 2025）<br>
+<code class="recipe">analysis -&gt; 指出 GRPO 长度偏置 [优化偏置无偏化]</code><br>
+<span class="idea"><span class="p">问题</span> GRPO 训练里响应越来越长、尤其错答案也变长，是不是病；<span class="p">方法</span> 发现 GRPO 的优化偏置人为拉长输出，提出无偏版本 Dr. GRPO；<span class="p">核心</span> 把「GRPO 长度膨胀」解释清楚，是理解 R1-Zero 式训练的关键批评。</span></p>
+
+<div class="deep">
+<p class="paper"><b>DAPO（Decoupled Clip + Dynamic sAmpling）</b>（<a href="https://arxiv.org/abs/2503.14476">2503.14476</a>，Yu et al. 2025，ByteDance/Tsinghua）<br>
+<code class="recipe">critic-free group + clip 解耦 -&gt; 稳定长 CoT RL [非对称 clip + 动态采样 + token 级 + 超长惩罚]</code><br>
+<span class="idea"><span class="p">问题</span> GRPO 在长 CoT 上 entropy collapse、clip 对称不合理、采样效率低；<span class="p">方法</span> 四个技术：非对称 clip（高/低阈值分开）、动态采样（过滤全对/全错的 prompt）、token 级 loss、超长奖励整形；<span class="p">核心</span> 开源（verl）的规模化 RL 系统，Qwen2.5-32B 纯 RL 到 AIME 50 分——是 GRPO 后最重要的工程/算法节点。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>GSPO（Group Sequence Policy Optimization）</b>（<a href="https://arxiv.org/abs/2507.18071">2507.18071</a>，2025）<br>
+<code class="recipe">critic-free group + 序列级 credit -&gt; 更稳更高效 [序列级重要性采样]</code><br>
+<span class="idea"><span class="p">问题</span> GRPO 把奖励均分到每个 token、credit 不精细，且训练不稳；<span class="p">方法</span> 提出「组序列」策略优化，用序列级重要性采样做更细的 credit assignment；<span class="p">核心</span> GRPO 的强替代，训练效率和稳定性都更好——credit assignment 正式进入「序列/ token 级」讨论。</span></p>
+</div>
+
+<p class="paper"><b>GEPO（Group Entropy-Controlled Policy Optimization）</b>（<a href="https://arxiv.org/abs/2607.16850">2607.16850</a>，2026）<br>
+<code class="recipe">critic-free group + 熵控制 -&gt; 稳定探索 [组内熵 + 非对称 advantage 整形]</code><br>
+<span class="idea"><span class="p">问题</span> GRPO 熵失控、探索和利用失衡；<span class="p">方法</span> 用组内熵（从已有采样免费估）做熵条件的非对称 advantage 整形；<span class="p">核心</span> GRPO 的轻量扩展，零额外采样成本，能直接嵌进现有 group 方法。</span></p>
+
+<h2>5. 推理 RL 落地（R1 / k1.5）</h2>
+<p class="trend">GRPO + 可验证奖励在真实模型上的两次大规模落地：DeepSeek-R1（纯 RL 出「aha moment」）和 Kimi k1.5（长上下文 + 多模态 + partial rollout）。它们是「算法能不能 scale」的证明。</p>
+
+<div class="deep">
+<p class="paper"><b>DeepSeek-R1</b>（<a href="https://arxiv.org/abs/2501.12948">2501.12948</a>，DeepSeek-AI 2025）<br>
+<code class="recipe">grpo + 可验证奖励 -&gt; 推理涌现 [R1-Zero 纯 RL + R1 SFT+RL + 蒸馏]</code><br>
+<span class="idea"><span class="p">问题</span> 推理能力能不能靠 RL 逼出来；<span class="p">方法</span> R1-Zero 只做 GRPO + 规则奖励（答案对/格式对），观察到「aha moment」自发长思维链；R1 再冷启动 SFT + RL + 蒸馏；<span class="p">核心</span> 证明「纯 RL + 可验证奖励」能 scale 出推理，GRPO 从论文走向工业，是整条线的引爆点。</span></p>
+</div>
+
+<p class="paper"><b>Kimi k1.5</b>（<a href="https://arxiv.org/abs/2501.12599">2501.12599</a>，Moonshot 2025）<br>
+<code class="recipe">rl(长 CoT + partial rollout) -&gt; 长上下文 RL [长度惩罚 + 多模态 + 课程]</code><br>
+<span class="idea"><span class="p">问题</span> 怎么在大规模、长上下文、多模态上把 RL 训稳；<span class="p">方法</span> 长 CoT、partial rollout、长度惩罚、多模态联合、课程学习；<span class="p">核心</span> 和 R1 同期把 RL 推理 scale 到长上下文 + 多模态，补充了 R1 没细讲的部分。</span></p>
+
+<h2>6. Credit assignment（奖励分到 response 级还是 token 级）</h2>
+<p class="trend">GRPO 默认把组内优势均分到整条 response 的所有 token，这是「粗粒度 credit」。这条线问：能不能把奖励/优势分到「过程」甚至「单个 token」？PRM 给过程监督、VinePPO 用 MC 估 token 价值、PRIME 用隐式过程奖励、DelTA 做判别式 token credit。核心矛盾：token 级更准，但「过程对错」本身难定义。</p>
+
+<p class="paper"><b>PRM（Let's Verify Step by Step）</b>（<a href="https://arxiv.org/abs/2305.20050">2305.20050</a>，Lightman et al. 2023，OpenAI）<br>
+<code class="recipe">prm -&gt; 过程级监督 [逐步验证器]</code><br>
+<span class="idea"><span class="p">问题</span> 结果奖励太稀疏，中间步骤对不对没信号；<span class="p">方法</span> 训练「过程奖励模型」给每一步打分，替代只给最终结果的结果奖励；<span class="p">核心</span> process vs outcome 的经典对照，过程监督是 token 级 credit 的源头（需人工逐步标注，贵）。</span></p>
+
+<p class="paper"><b>VinePPO</b>（<a href="https://arxiv.org/abs/2410.01679">2410.01679</a>，Kazemnejad et al. 2024，ICML 2025）<br>
+<code class="recipe">pg + MC 价值 -&gt; 无偏 token 级 credit [MC 估值替代价值网络]</code><br>
+<span class="idea"><span class="p">问题</span> 价值网络估优势有偏、还慢，能不能既 token 级又无偏；<span class="p">方法</span> 用语言环境的灵活性做无偏蒙特卡洛估值，替代价值网络，把 credit 精化到 token 级；<span class="p">核心</span> 「不丢 PPO 的 credit 精度」的代表，KL 权衡好 3 倍。</span></p>
+
+<p class="paper"><b>PRIME（Process Reinforcement through Implicit Rewards）</b>（<a href="https://arxiv.org/abs/2502.01456">2502.01456</a>，Cui et al. 2025）<br>
+<code class="recipe">prm(隐式) -&gt; 免人工标注的过程奖励 [用结果标签在线更新 PRM]</code><br>
+<span class="idea"><span class="p">问题</span> 过程奖励要人工逐步标注、太贵；<span class="p">方法</span> 只用策略 rollout 和结果标签，学「隐式过程奖励」，PRM 在线更新；<span class="p">核心</span> 把过程监督的成本打下来，过程奖励不用人工标注。</span></p>
+
+<p class="paper"><b>DelTA（Discriminative Token Credit Assignment）</b>（<a href="https://arxiv.org/abs/2605.21467">2605.21467</a>，2026）<br>
+<code class="recipe">credit(判别式 token) -&gt; 可验证奖励的 token 级 credit [判别哪些 token 关键]</code><br>
+<span class="idea"><span class="p">问题</span> 可验证奖励只有结果对/错，怎么分到 token；<span class="p">方法</span> 判别式地给 token 分配 credit（区分哪些 token 对最终对错有贡献）；<span class="p">核心</span> 2026 年 credit assignment 的最新代表作，回应「token 级 credit」这条线。</span></p>
+
+<h2>7. On-policy 蒸馏（OPD / OPSD / MOPD）</h2>
+<p class="trend">最新一波（2026）干脆换信号：不用「奖励标量」，改用「强 teacher 在 student 自己 rollout 上的 token 级分布」当监督。OPSD 让同一个模型既当 teacher 又当 student，OPD 修它的训练坑，MOPD 用多个领域 teacher 把能力「在策略空间」整合（DeepSeek-V4、MiMo-V2 都在用）。这波把 LLM 后训练从「RL 优化奖励」推向「on-policy 蒸馏」。</p>
+
+<div class="deep">
+<p class="paper"><b>OPSD（Self-Distilled Reasoner: On-Policy Self-Distillation）</b>（<a href="https://arxiv.org/abs/2601.18734">2601.18734</a>，Zhao et al. 2026）<br>
+<code class="recipe">on-policy distill(self) -&gt; token 级自我蒸馏 [一个模型当 teacher + student，teacher 有特权上下文]</code><br>
+<span class="idea"><span class="p">问题</span> 没有更强 teacher 时怎么自我提升；<span class="p">方法</span> 同一个模型当 teacher（给特权上下文/参考答案）和 student（不给），在 student 自己采的 rollout 上做 token 级蒸馏；<span class="p">核心</span> 定义 on-policy self-distillation（OPSD），把「自我改进」变成稠密 token 监督，是 OPD 线的起点。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>OPD（Rethinking On-Policy Distillation）</b>（<a href="https://arxiv.org/abs/2604.13016">2604.13016</a>，Li et al. 2026）<br>
+<code class="recipe">on-policy distill -&gt; 训练坑 + 配方 [top-K 支持匹配 + 截断 reverse-KL]</code><br>
+<span class="idea"><span class="p">问题</span> sampled-token OPD 训练动力学没搞清、实际不好训；<span class="p">方法</span> 识别三种失败模式（token 级监督不平衡、teacher 对学生前缀指导不可靠、tokenizer 不匹配），给 teacher top-K 支持匹配 + 截断 reverse-KL 等修复；<span class="p">核心</span> 把 OPD 从「看着好」变成「真能训」，是 OPD 工程化的关键。</span></p>
+</div>
+
+<div class="deep">
+<p class="paper"><b>MOPD（Multi-Teacher On-Policy Distillation）</b>（<a href="https://arxiv.org/abs/2606.30406">2606.30406</a>，2026）<br>
+<code class="recipe">on-policy distill(multi-teacher) -&gt; 能力整合 [各领域 teacher 蒸馏进一个 student]</code><br>
+<span class="idea"><span class="p">问题</span> 多个领域能力（数学/代码/agent）怎么整合进一个模型，而不在权重/静态数据集里拼；<span class="p">方法</span> 先各领域独立 RL 训出强 teacher，再在策略空间用 on-policy 蒸馏把它们整合进单个 student；<span class="p">核心</span> 多 teacher 能力整合范式，DeepSeek-V4 / MiMo-V2-Flash 的 post-training 都在用。</span></p>
+</div>
+
+<h2>8. 框架（verl / HybridFlow）</h2>
+<p class="trend">算法能 scale，靠的是框架。verl（HybridFlow）是 GRPO/DAPO/R1 这些算法落地的开源底座，也是「哪些算法被工业界真正用起来」的风向标。</p>
+
+<p class="paper"><b>HybridFlow / verl</b>（<a href="https://arxiv.org/abs/2409.19256">2409.19256</a>，Sheng et al. 2024）<br>
+<code class="recipe">framework(单控多模型) -&gt; 灵活 RLHF 训练 [异构计算 / 3D 并行]</code><br>
+<span class="idea"><span class="p">问题</span> RLHF 里 actor/critic/ref/reward 模型资源需求不同、框架僵化；<span class="p">方法</span> 单控制器 + 多模型 + 异构计算 + 3D 并行，灵活分配；<span class="p">核心</span> 开源 RL 框架 verl 的技术报告，GRPO/DAPO/R1 大规模训练的实际底座。</span></p>
+
+<h2>9. 共识与分歧（速记版）</h2>
+<p><b>共识：</b></p>
+<ol>
+<li>critic-free 的 group 方法（GRPO/DAPO）已成为推理 RL 的事实标准，价值模型基本被甩掉。</li>
+<li>可验证奖励（代码/数学）是最可靠的 RL 信号，R1/k1.5 靠它 scale。</li>
+<li>credit assignment 从 response 级走向 token 级是大方向（GSPO/VinePPO/PRIME/DelTA）。</li>
+<li>2026 起 on-policy 蒸馏（OPD/OPSD/MOPD）成为后训练新范式，被 DeepSeek-V4 等旗舰采用。</li>
+</ol>
+<p><b>分歧 / 难点：</b></p>
+<ol>
+<li><b>token 级信号从哪来</b>：PRM（需过程标注/隐式）vs on-policy 蒸馏（teacher 分布）vs MC 估值（VinePPO），三条路争「谁给稠密 credit」。</li>
+<li><b>过程对错难定义</b>：PRM 的过程奖励本身就可能 reward-hack、被「看起来对」蒙骗。</li>
+<li><b>RL 还是蒸馏</b>：GRPO 线靠「奖励信号」，OPD 线靠「teacher 分布」，两者能否统一（用奖励当 teacher）没有定论。</li>
+<li><b>长度/熵失控</b>：GRPO 的长度偏置（Dr.GRPO）和熵 collapse（DAPO/GEPO）反复出现，说明 critic-free group 还有内在不稳。</li>
+<li><b>评测</b>：算法进步和「数据/奖励设计/teacher」的贡献难分离，很多 SOTA 是工程集成的结果。</li>
+</ol>
+
+<hr>
+<p class="note">说明：点名线（GRPO/GSPO/GEPO/DAPO）、credit assignment（PRM/VinePPO/PRIME/DelTA）、OPD/OPSD/MOPD 已读摘要/方法，arXiv 号均逐一核对。挑选标准：节点性文章（PPO/RLHF/DPO/GRPO/DAPO/R1）+ 知名 repo（verl/TRL）已实现的算法（RLOO/GRPO/DAPO/GSPO）。agentic RL（tool calling、multi-turn、环境奖励）与本领域高度重合但重心在「轨迹/环境设计」而非「策略优化算法」，建议单独成篇。</p>
+
+</main>
+</body>
+</html>
