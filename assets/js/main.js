@@ -14,15 +14,4 @@
     b.addEventListener('click', function () { setLv(b.getAttribute('data-lv')); });
   });
   setLv('2');
-
-  // LaTeX 渲染（Temml → MathML Core）：$…$ 行内、$$…$$ 独立行；<code> 里也要渲染
-  if (window.temml && window.temml.renderMathInElement) {
-    window.temml.renderMathInElement(document.body, {
-      delimiters: [
-        { left: '$$', right: '$$', display: true },
-        { left: '$', right: '$', display: false }
-      ],
-      ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'option']
-    });
-  }
 })();

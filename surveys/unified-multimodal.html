@@ -4,47 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>统一多模态模型（Unified Multimodal Models）速览</title>
-<style>
-:root { --accent:#0e7490; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#ecfeff; }
-* { box-sizing: border-box; }
-body { margin:0; background:#fafafa; color:var(--text);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
-  line-height:1.75; font-size:16px; }
-.container { max-width:940px; margin:0 auto; padding:44px 28px 96px; background:#fff; box-shadow:0 0 0 1px var(--border); min-height:100vh; }
-h1 { font-size:1.75em; line-height:1.35; border-bottom:2px solid var(--accent); padding-bottom:.4em; margin:.1em 0 .2em; }
-.sub { color:var(--muted); margin-top:0; }
-h2 { font-size:1.32em; margin-top:2.2em; border-bottom:1px solid var(--border); padding-bottom:.3em; }
-h3 { font-size:1.1em; margin-top:1.8em; color:#111827; }
-a { color:var(--accent); text-decoration:none; }
-a:hover { text-decoration:underline; }
-table { width:100%; border-collapse:collapse; margin:1.2em 0; font-size:.94em; }
-th,td { border:1px solid var(--border); padding:.5em .75em; text-align:left; vertical-align:top; }
-th { background:#f0fdfa; }
-tr:nth-child(even) td { background:#fafafa; }
-blockquote { border-left:4px solid var(--accent); margin:1.2em 0; padding:.5em 1em; background:var(--bg); color:#374151; border-radius:0 6px 6px 0; }
-.paper { margin:1.25em 0; }
-.paper b { color:#111827; }
-code.recipe { display:inline-block; margin:.4em 0; background:var(--bg); border-left:3px solid var(--accent); padding:.34em .72em; border-radius:5px; font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:.9em; color:#111827; }
-.idea { color:#374151; }
-.idea .p { color:#b91c1c; font-weight:600; }
-.trend { color:#374151; background:#ecfeff; border-left:3px solid #0e7490; padding:.55em .85em; border-radius:5px; margin:.55em 0 1.1em; }
-.deep { background:#f0fdfa; border:1px solid #99f6e4; border-radius:8px; padding:.1em 1em .5em; margin:1em 0; }
-hr { border:none; border-top:1px solid var(--border); margin:2.2em 0; }
-.note { color:var(--muted); font-size:.9em; }
-ol,ul { padding-left:1.5em; }
-li { margin:.35em 0; }
-@media (max-width:640px){ .container{padding:28px 16px 64px;} body{font-size:15px;} }
-
-.lvbar { position:sticky; top:0; z-index:10; background:#fff; border-bottom:1px solid var(--border); padding:8px 0 10px; margin:0 0 18px; display:flex; align-items:center; gap:8px; }
-.lvlabel { font-size:.85em; color:var(--muted); margin-right:2px; }
-.lvbtn { font-size:.85em; border:1px solid var(--border); background:#fff; color:var(--muted); border-radius:999px; padding:3px 14px; cursor:pointer; }
-.lvbtn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-body.lv1 .paper { display:none; }
-body.lv1 .deep .paper { display:block; }
-body.lv1 .note, body.lv2 .note { display:none; }
-</style>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/Temml-Local.min.css">
-<script src="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/temml.min.js" defer></script>
+<link rel="stylesheet" href="../assets/css/main.css">
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$']], displayMath: [['$$', '$$']], processEscapes: true },
+  svg: { fontCache: 'global' },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'option'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" defer></script>
 </head>
 <body>
 <main class="container">

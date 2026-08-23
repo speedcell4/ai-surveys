@@ -151,10 +151,9 @@
 
 ## 交付
 
-- 直接手写 HTML（不要 Markdown 转 HTML），风格对齐 `surveys/` 下已有文件。CSS 可内联（每页只保留 `:root` 主题色等少量局部样式），JS 不内联，统一引用 `../assets/js/main.js`。
-- **数学公式用 Temml 渲染**（TeX → MathML Core，轻、快、无需多依赖）。写法：LaTeX 放在 `$…$`（行内）或 `$$…$$`（独立行）。每页 `<head>` 引这两个 CDN：
-  - `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/Temml-Local.min.css">`
-  - `<script src="https://cdn.jsdelivr.net/npm/temml@0.13.3/dist/temml.min.js" defer></script>`
+- 直接手写 HTML（不要 Markdown 转 HTML），风格对齐 `surveys/` 下已有文件。CSS 不内联，统一引用共享样式：入口页 `assets/css/main.css`、速览页 `../assets/css/main.css`；JS 不内联，统一引用 `../assets/js/main.js`。
+- **数学公式用 MathJax 渲染**。写法：LaTeX 放在 `$…$`（行内）或 `$$…$$`（独立行）。每页 `<head>` 在 `<script src="../assets/js/main.js" defer></script>` 前配置 `window.MathJax` 并引用：
+  - `<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" defer></script>`
 - **配方 / 伪公式里的数学记号一律写 LaTeX**，别再用 Unicode 伪上标：`O(n²)` 写 `$O(n^2)$`、`O(n√n)` 写 `$O(n\sqrt{n})$`、`k·vᵀ` 写 `$k\cdot v^{\top}$`、希腊字母 `ε / φ / γ / β` 写 `$\varepsilon$` 等。配方里非数学的箭头仍用 `-&gt;`。
 - HTML 成品放 `surveys/<topic>.html`，台账放 `data/<topic>.jsonl`；更新根目录 `index.html` 和 `README.md` 的索引。
 
