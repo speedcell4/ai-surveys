@@ -189,8 +189,8 @@ window.MathJax = {
 
 <div class="deep">
 <p class="paper"><b>EPG（There is No VAE）</b>（<a href="https://arxiv.org/abs/2510.12586">2510.12586</a>）<br>
-<code class="recipe">flow(patch + noise) -&gt; x-pred + consistency-loss（自监督预训练）</code><br>
-<span class="idea"><span class="p">问题</span> 没 VAE 就学不出好表示；<span class="p">方法</span> 先自监督预训练学语义，再端到端训一致性模型；<span class="p">核心</span> 用 SSL 的「两阶段」替代 VAE 的「压缩」。</span></p>
+<code class="recipe">flow(patch + noise) -&gt; x-pred + consistency-loss（SSL 预训练 + 像素空间一致性训练）</code><br>
+<span class="idea"><span class="p">问题</span> 没 VAE 就学不出好表示；<span class="p">方法</span> 先自监督预训练学语义，再端到端在原始高分辨率像素上训一致性模型（不用预训练 VAE / 扩散）；<span class="p">核心</span> 用 SSL 的「两阶段」替代 VAE 的「压缩」，是首个直接在像素上训 consistency model 的路线。</span></p>
 </div>
 
 <p class="paper"><b>pMF（Pixel Mean Flow）</b>（<a href="https://arxiv.org/abs/2601.22158">2601.22158</a>）<br>
@@ -225,8 +225,8 @@ window.MathJax = {
 <span class="idea"><span class="p">问题</span> 像素空间「质量 vs 算力」的权衡；<span class="p">方法</span> 拆成「全局结构 + 局部细节」两步；<span class="p">核心</span> 大 patch 管全局、轻量头补局部。</span></p>
 
 <p class="paper"><b>PixelGen</b>（<a href="https://arxiv.org/abs/2602.02493">2602.02493</a>）<br>
-<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss + 感知损失(LPIPS/DINO)</code><br>
-<span class="idea"><span class="p">问题</span> 像素扩散主观质量不如潜空间；<span class="p">方法</span> 加感知损失（LPIPS 管局部纹理 + DINO 管全局语义）；<span class="p">核心</span> 像素扩散反超潜空间。</span></p>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss + lpips($\hat{x}$, $x$) + $1-\cos(f_{DINO}(\hat{x}), f_{DINO}(x))$ + repa</code><br>
+<span class="idea"><span class="p">问题</span> 像素扩散主观质量不如潜空间；<span class="p">方法</span> 在 flow-matching 损失外加两种感知损失：LPIPS 按 VGG 各层加权 $L_2$ 管局部纹理，patch 级 DINO 特征余弦相似度 $1-\cos(f_{DINO}(\hat{x}), f_{DINO}(x))$ 管全局语义，再叠加 REPA 表示对齐；<span class="p">核心</span> ImageNet-256 无 CFG、80 epoch FID 5.11（对比 REPA latent baseline 800 epoch 5.90），GenEval 0.79。</span></p>
 
 <p class="paper"><b>HyperDiT</b>（<a href="https://arxiv.org/abs/2605.15741">2605.15741</a>）<br>
 <code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（跨尺度超连接 + register）</code><br>
@@ -248,8 +248,8 @@ window.MathJax = {
 <p class="trend">像素空间最大的痛点是高频细节容易丢。一条支线把「低频语义」和「高频纹理」显式拆开，各交给不同模块 / 路径处理。</p>
 
 <p class="paper"><b>DeCo</b>（<a href="https://arxiv.org/abs/2511.19365">2511.19365</a>）<br>
-<code class="recipe">flow(patch + noise) -&gt; v-pred + 频率感知 FM-loss（低频 DiT + 高频解码器）</code><br>
-<span class="idea"><span class="p">问题</span> 像素扩散丢高频细节；<span class="p">方法</span> 低频语义交给 DiT、高频细节交给轻量解码器；<span class="p">核心</span> 各管各的频段。</span></p>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + 频率感知 v-loss（JPEG 量化表逐频加权）+ 轻量像素解码器</code><br>
+<span class="idea"><span class="p">问题</span> 像素扩散丢高频细节；<span class="p">方法</span> 把归一化后 JPEG 量化表权重的倒数当逐频率权重、加进 flow-matching 损失，DiT 只出低频语义、轻量 pixel decoder 据低频语义补高频；<span class="p">核心</span> 低频语义与高频纹理各管各的频段，ImageNet FID $256^2$ 1.62、$512^2$ 2.22。</span></p>
 
 <p class="paper"><b>FrequencyBooster</b>（<a href="https://arxiv.org/abs/2605.17759">2605.17759</a>）<br>
 <code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（全频段建模）</code><br>
@@ -260,31 +260,31 @@ window.MathJax = {
 <span class="idea"><span class="p">问题</span> 去噪器在高频噪声上浪费容量；<span class="p">方法</span> 输入前用 DCT 低通掩码「给去噪器看信号、藏噪声」；<span class="p">核心</span> 参数免费还更省容量。</span></p>
 
 <p class="paper"><b>FREPix</b>（<a href="https://arxiv.org/abs/2605.06421">2605.06421</a>）<br>
-<code class="recipe">flow(patch + noise) -&gt; 低频/高频分路径 + 频率感知 loss</code><br>
-<span class="idea"><span class="p">问题</span> 一个 flow 难同时搬低频与高频；<span class="p">方法</span> 显式拆成低、高频两条 transport path；<span class="p">核心</span> 频率异构的 flow matching。</span></p>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + 频率感知 loss + repa + lpips（低/高频分 schedule）</code><br>
+<span class="idea"><span class="p">问题</span> 一个 flow 难同时搬低频与高频；<span class="p">方法</span> 把状态拆成低频/高频两个子状态，各配独立 schedule $g_l(t)$、$g_h(t)$，分解后的网络分别预测两个分量，最终目标除频率感知 loss 外还加 REPA 与 LPIPS；<span class="p">核心</span> 频率异构的 flow matching。</span></p>
 
 <p class="paper"><b>Energy-Guided Flow Matching</b>（<a href="https://arxiv.org/abs/2608.05811">2608.05811</a>）<br>
-<code class="recipe">flow(patch + noise) -&gt; v-pred + 能量引导 loss</code><br>
-<span class="idea"><span class="p">问题</span> 固定终点的 flow 不够灵活；<span class="p">方法</span> 按每张图的频谱能量逐步释放频率信息；<span class="p">核心</span> 终点自适应，0.85 GenEval。</span></p>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（heat-kernel 滤波的移动终点）</code><br>
+<span class="idea"><span class="p">问题</span> 固定终点的 flow 不够灵活；<span class="p">方法</span> 把固定干净终点换成 heat-kernel 滤波后的移动终点，按每张图频谱能量决定何时释放高频信号；<span class="p">核心</span> 终点自适应，0.85 GenEval。</span></p>
 
 <p class="paper"><b>RaPD（Resolution-Agnostic Pixel Diffusion）</b>（<a href="https://arxiv.org/abs/2605.15908">2605.15908</a>）<br>
-<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（语义增强的隐式表示）</code><br>
-<span class="idea"><span class="p">问题</span> 像素扩散绑定固定分辨率；<span class="p">方法</span> 用语义增强的隐式神经场（INR）表示像素；<span class="p">核心</span> 分辨率无关生成。</span></p>
+<code class="recipe">flow(nif(patch) + noise) -&gt; v-pred + v-loss（VFM 语义引导 + 密度感知时刻偏移）</code><br>
+<span class="idea"><span class="p">问题</span> 像素扩散绑定固定分辨率；<span class="p">方法</span> 在连续神经图像场（NIF）latent 上扩散：Semantic Representation Guidance 注入 VFM 语义做 generation-aware latent 学习，Latent-Density-Aware Timestep Shift 按 latent 密度调 schedule，Coordinate-Queried Attention Renderer 按坐标渲染；<span class="p">核心</span> 分辨率无关生成。</span></p>
 
 <h3>2.6 训练技巧与机理</h3>
 <p class="trend">除了改架构，还有人从训练本身下手：表示对齐、register、自引导、缩放律，各自补一个像素扩散的短板。</p>
 
 <p class="paper"><b>PixelREPA（KAIST）</b>（<a href="https://arxiv.org/abs/2603.14366">2603.14366</a>）<br>
 <code class="recipe">flow(patch + noise) -&gt; x-pred + v-loss + cos(mta(h_t, mask), dino(x).detach())</code><br>
-<span class="idea"><span class="p">问题</span> 原版 REPA 的 patch 级 MLP 直接回归会撞上「像素空间自由度高、DINO 目标压缩低」的信息不对称，导致 feature hacking、多样性崩；<span class="p">方法</span> 把 MLP 换成带随机 token mask 的浅层 Transformer adapter（MTA）：先对中间表示 $h_t$ 做上下文聚合，再和冻结 DINO 对干净图 $x$ 的 patch 特征做余弦相似度；<span class="p">核心</span> 用 mask 把像素侧自由度压下来、逼 adapter 做 contextual prediction，而不是逐 token 走捷径。</span></p>
+<span class="idea"><span class="p">问题</span> 原版 REPA 的 patch 级 MLP 直接回归会撞上「像素空间自由度高、DINO 目标压缩低」的信息不对称，导致 feature hacking、多样性崩；<span class="p">方法</span> 把 MLP 换成带随机 token mask 的浅层 Transformer adapter（MTA）：先对中间表示 $h_t$ 做上下文聚合，再和冻结 DINO 对干净图 $x$ 的 patch 特征做余弦相似度；<span class="p">核心</span> 用 mask 把像素侧自由度压下来、逼 adapter 做 contextual prediction，而不是逐 token 走捷径；JiT-B/16 ImageNet-256 FID 3.66→3.17、IS 275.1→284.6，收敛 >2×。</span></p>
 
 <p class="paper"><b>Registers Matter for pDiT</b>（<a href="https://arxiv.org/abs/2605.16147">2605.16147</a>）<br>
-<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss + Register Guidance</code><br>
-<span class="idea"><span class="p">问题</span> DiT 里高范数 token 的作用不清；<span class="p">方法</span> 证明这些高范数 token 就是 register，对像素 DiT 生成质量关键，提出 Register Guidance；<span class="p">核心</span> register 是像素 DiT 的隐性语义载体。</span></p>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss + Register Guidance [$\hat{v}_t = v(x_t,t,R) + w_{rg}(v(x_t,t,R)-v(x_t,t,0))$]</code><br>
+<span class="idea"><span class="p">问题</span> DiT 里高范数 token 的作用不清；<span class="p">方法</span> 证明这些高范数 token 就是 register、对像素 DiT 生成质量关键；推理时用「有 register 的速度减去无 register 的速度」做引导：$\hat{v}_t = v(x_t,t,R) + w_{rg}(v(x_t,t,R)-v(x_t,t,0))$；<span class="p">核心</span> register 是像素 DiT 的隐性语义载体。</span></p>
 
 <p class="paper"><b>A Frozen Pixel-Space Diffusion Model Can Guide Itself</b>（<a href="https://arxiv.org/abs/2607.29122">2607.29122</a>）<br>
-<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（冻结自引导）</code><br>
-<span class="idea"><span class="p">问题</span> 提升质量通常要重训；<span class="p">方法</span> 冻结模型用自己生成的样本自引导；<span class="p">核心</span> 无需重新训练。</span></p>
+<code class="recipe">flow(patch + noise) -&gt; v-pred + v-loss（冻结自引导：中间 vs 最终预测差作引导）</code><br>
+<span class="idea"><span class="p">问题</span> 提升质量通常要重训；<span class="p">方法</span> 冻结主干，只训 adapter，用「中间层预测与最终预测的差」作为自引导信号；<span class="p">核心</span> 无需重新训练主干即可提升。</span></p>
 
 <div class="deep">
 <p class="paper"><b>Abra（Scaling Diffusion Image Training）</b>（<a href="https://arxiv.org/abs/2608.17286">2608.17286</a>）<br>
@@ -294,7 +294,7 @@ window.MathJax = {
 
 <p class="paper"><b>REPA（Representation Alignment for Generation）</b>（<a href="https://arxiv.org/abs/2410.06940">2410.06940</a>）<br>
 <code class="recipe">flow(A + noise) -&gt; v-pred + cos(h_phi(h_t), dino(x).detach())</code><br>
-<span class="idea"><span class="p">问题</span> DiT 训练难、收敛慢；<span class="p">方法</span> 把去噪网络中间表示 $h_t$ 用可训练 MLP $h_\phi$ 投影，再与冻结 DINO 对干净图 $x$ 的 patch 特征做余弦相似度最大化；<span class="p">核心</span> 表示对齐让 DiT 训练快 17.5×、质量更好——PixelREPA 的源头。</span></p>
+<span class="idea"><span class="p">问题</span> DiT 训练难、收敛慢；<span class="p">方法</span> 把去噪网络中间表示 $h_t$ 用可训练 MLP $h_\phi$ 投影，再与冻结 DINO 对干净图 $x$ 的 patch 特征做余弦相似度最大化；论文横评 MAE、DINO、MoCov3、CLIP、SigLIP、DINOv2 做教师，DINOv2 系列的 FID 最好，因此选它做对齐目标；<span class="p">核心</span> 表示对齐让 DiT 训练快 17.5×、质量更好——PixelREPA 的源头。</span></p>
 
 <h3>2.7 像素解码器（VAE 降级 / 删除）</h3>
 <p class="trend">一条更保守的路线：不删整个 VAE，只把最后「latent → 像素」的解码器换成像素扩散，既保留 latent 的高效又补回细节。</p>
@@ -312,12 +312,12 @@ window.MathJax = {
 <span class="idea"><span class="p">问题</span> 视频 latent 解码丢细节；<span class="p">方法</span> 视频解码器也做成扩散、用像素空间损失；<span class="p">核心</span> 补回 latent 丢的细节。</span></p>
 
 <p class="paper"><b>RAE（Diffusion Transformers with Representation Autoencoders）</b>（<a href="https://arxiv.org/abs/2510.11690">2510.11690</a>）<br>
-<code class="recipe">flow(rae(patch) + noise) -&gt; v-pred + 重建 loss（表示自编码器）</code><br>
-<span class="idea"><span class="p">问题</span> VAE 是否不可替代；<span class="p">方法</span> 用冻结的表示编码器（DINO 等）+ 训 decoder 组成 RAE 替代 VAE；<span class="p">核心</span> 表示自编码器比 VAE 更简更强，是本综述「去 VAE」的中坚。</span></p>
+<code class="recipe">flow(rae(patch) + noise) -&gt; v-pred + 重建 loss（表示自编码器：冻结 DINO/SigLIP/MAE + 训 decoder）</code><br>
+<span class="idea"><span class="p">问题</span> VAE 是否不可替代；<span class="p">方法</span> 冻结表示编码器（DINO / SigLIP / MAE）并训 decoder 组成 RAE：阶段一先做重建，阶段二再在该 latent 上训扩散；<span class="p">核心</span> 表示自编码器比 VAE 更简更强，是本综述「去 VAE」的中坚。</span></p>
 
 <p class="paper"><b>Latent Diffusion Model without VAE</b>（<a href="https://arxiv.org/abs/2510.15301">2510.15301</a>）<br>
-<code class="recipe">flow(patch + noise) -&gt; v-pred + 自监督（无 VAE latent）</code><br>
-<span class="idea"><span class="p">问题</span> VAE 是有损瓶颈；<span class="p">方法</span> 直接在像素空间做 latent diffusion、用自监督替代 VAE；<span class="p">核心</span> 「latent 但无 VAE」的中间路线，衔接 EPG/Tuna-R。</span></p>
+<code class="recipe">flow(dinov3(patch) + noise) -&gt; v-pred + 重建 loss（无 VAE latent）</code><br>
+<span class="idea"><span class="p">问题</span> VAE 是有损瓶颈；<span class="p">方法</span> 用冻结的 DINOv3 自监督特征直接当 latent，再加轻量残差编码器补细节，然后做 latent diffusion；<span class="p">核心</span> 「latent 但无 VAE」的中间路线，衔接 EPG/Tuna-R。</span></p>
 
 <p class="paper"><b>MAETok（Masked Autoencoders Are Effective Tokenizers）</b>（<a href="https://arxiv.org/abs/2502.03444">2502.03444</a>）<br>
 <code class="recipe">masked-ae(patch) -&gt; 重建 + 扩散（MAE tokenizer）</code><br>
@@ -336,18 +336,18 @@ window.MathJax = {
 <code class="recipe">ar(vq 多尺度) -&gt; ce(h_r, x_r) [h_r = scale r 的 codebook logits；x_r = scale r 的真实 token map]</code><br>
 <span class="idea"><span class="p">问题</span> 逐 token（光栅序）生成又慢又违反图像的层级结构；<span class="p">方法</span> 多尺度 VQ + 从粗到细逐尺度预测；<span class="p">核心</span> next-scale 取代 next-token。</span></p>
 <p class="paper"><b>MAR</b>（<a href="https://arxiv.org/abs/2406.11838">2406.11838</a>）<br>
-<code class="recipe">ar(mask patch) -&gt; diffusion-loss</code><br>
-<span class="idea"><span class="p">问题</span> VQ 离散化有量化损失、表达受限；<span class="p">方法</span> 丢掉 VQ，用掩码自回归 + 扩散损失建模连续 token；<span class="p">核心</span> AR 不一定要离散 token。</span></p>
-<p class="paper"><b>Fluid</b>（<a href="https://arxiv.org/abs/2410.13892">2410.13892</a>）<br>
+<code class="recipe">ar(mask patch) -&gt; mse(去噪头输出, 扩散目标)（去噪 MSE 作逐 token 似然代理）</code><br>
+<span class="idea"><span class="p">问题</span> VQ 离散化有量化损失、表达受限；<span class="p">方法</span> 丢掉 VQ，用掩码自回归 + 去噪 MSE（diffusion-loss）作为逐 token 似然代理来建模连续 token；<span class="p">核心</span> AR 不一定要离散 token。</span></p>
+<p class="paper"><b>Fluid</b>（<a href="https://arxiv.org/abs/2410.13863">2410.13863</a>）<br>
 <code class="recipe">ar(patch 连续 token) -&gt; flow-loss（随机序）</code><br>
-<span class="idea"><span class="p">问题</span> 离散 token + 光栅序不是最优；<span class="p">方法</span> 连续 token + 随机序自回归；<span class="p">核心</span> 连续 + 随机序比离散 + 光栅序更好。</span></p>
+<span class="idea"><span class="p">问题</span> 离散 token + 光栅序不是最优；<span class="p">方法</span> 10.5B 连续 token + 随机序自回归；<span class="p">核心</span> 连续 + 随机序比离散 + 光栅序更好，zero-shot MS-COCO FID 6.16、GenEval 0.69。</span></p>
 <p class="paper"><b>LongCat-Next</b>（<a href="https://arxiv.org/abs/2603.27538">2603.27538</a>）<br>
 <code class="recipe">ar(discrete text+image+audio) -&gt; ce(h_t, x_{t+1}) [h_t = 统一离散词表 logits；x_{t+1} = 下一 token id] [dNaViT]</code><br>
 <span class="idea"><span class="p">问题</span> 各模态各自一套 tokenizer / model；<span class="p">方法</span> 把所有模态词元化成同一离散 token 空间，纯 NTP 一个模型搞定；<span class="p">核心</span> 离散原生多模态（MoE A3B、2T tokens）。</span></p>
 
 <p class="paper"><b>Farmer</b>（<a href="https://arxiv.org/abs/2510.23588">2510.23588</a>）<br>
-<code class="recipe">ar(patch) -&gt; 连续 token + flow-loss</code><br>
-<span class="idea"><span class="p">问题</span> 离散 token 有量化损失；<span class="p">方法</span> 像素上用 flow 自回归连续 token；<span class="p">核心</span> 无量化损失的像素自回归。</span></p>
+<code class="recipe">ar(nf(patch)) -&gt; 连续 latent 序列分布建模（可逆 normalizing flow + AR）</code><br>
+<span class="idea"><span class="p">问题</span> 离散 token 有量化损失；<span class="p">方法</span> 用可逆自回归 flow 把图像变换成 latent 序列，再由 AR 建模其分布；<span class="p">核心</span> normalizing flow + AR，不是 flow matching，无量化损失的像素自回归。</span></p>
 
 <p class="paper"><b>Fractal Generative Models</b>（<a href="https://arxiv.org/abs/2502.17437">2502.17437</a>）<br>
 <code class="recipe">ar(patch 多粒度) -&gt; 分形 ce(h_l, x_l) [h_l = 层级 l 的下一 token logits；x_l = 该层真实 token / pixel index]</code><br>
@@ -366,12 +366,12 @@ window.MathJax = {
 <span class="idea"><span class="p">问题</span> 像素自回归质量差；<span class="p">方法</span> 并行 rollout 近似；<span class="p">核心</span> 提升像素自回归质量。</span></p>
 
 <p class="paper"><b>MAR-GRPO</b>（<a href="https://arxiv.org/abs/2604.06966">2604.06966</a>）<br>
-<code class="recipe">ar(mask patch) -&gt; 扩散头 + GRPO</code><br>
-<span class="idea"><span class="p">问题</span> 掩码自回归 + 扩散头训练不稳定；<span class="p">方法</span> 用 GRPO 稳定化；<span class="p">核心</span> 解决扩散头的噪声梯度。</span></p>
+<code class="recipe">ar(mask patch) -&gt; 冻结扩散头 + GRPO [multi-trajectory expectation + consistency-aware token 筛选]</code><br>
+<span class="idea"><span class="p">问题</span> 掩码自回归 + 扩散头训练不稳定；<span class="p">方法</span> 冻结扩散头、只用 GRPO 优化 AR Transformer；multi-trajectory expectation 对多条扩散轨迹取平均降扩散噪声梯度，consistency-aware token selection 筛掉与最终内容不一致的 AR token；<span class="p">核心</span> 稳定训练 + 降扩散头噪声梯度。</span></p>
 
 <p class="paper"><b>NextFlow</b>（<a href="https://arxiv.org/abs/2601.02204">2601.02204</a>）<br>
 <code class="recipe">transformer_shared (codebook_sem + codebook_pix) -&gt; ce(h_t, x_{t+1}) [h_t = 双 codebook 拼接后的 logits；x_{t+1} = 下一语义/像素 token id]</code><br>
-<span class="idea"><span class="p">问题</span> 语义与像素难统一建模；<span class="p">方法</span> 双 codebook 解耦语义与像素；<span class="p">核心</span> 6T 图文 token 统一自回归。</span></p>
+<span class="idea"><span class="p">问题</span> 语义与像素难统一建模；<span class="p">方法</span> 双 codebook：语义 codebook 管物体/内容，像素 codebook 管纹理/细节；<span class="p">核心</span> 6T 图文 token 统一自回归。</span></p>
 
 <h3>2.9 统一多模态 / 视觉基础模型</h3>
 <p class="trend">这部分已拆成独立深读：<a href="unified-multimodal.html">统一多模态模型速览</a>。那里逐篇读原文（Tuna 家族的问题/方法/效果 + 引用网络），并改用更适合该领域的配方记法（视觉表示 &times; 目标 &times; 结构）。</p>

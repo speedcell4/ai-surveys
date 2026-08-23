@@ -183,8 +183,8 @@ window.MathJax = {
 <span class="idea"><span class="p">问题</span> 超长上下文的 KV 显存放不下；<span class="p">方法</span> 原生稀疏注意力 + 把不活跃 KV offload 到 CPU；<span class="p">核心</span> 稀疏 + 卸载，突破显存上限。</span></p>
 
 <p class="paper"><b>MiniMax Sparse Attention</b>（<a href="https://arxiv.org/abs/2606.13392">2606.13392</a>，2026）<br>
-<code class="recipe">sparse(块 + 局部) -&gt; 十万到百万 token [层次化块稀疏]</code><br>
-<span class="idea"><span class="p">问题</span> agentic / 仓库级代码 / 持久记忆要求几十万到百万 token 联合注意力，softmax 部署不起；<span class="p">方法</span> blockwise 稀疏 + 局部窗口，训练推理都稀疏；<span class="p">核心</span> 工业级稀疏注意力的落地。</span></p>
+<code class="recipe">sparse(block + local) -&gt; $O(kB_k)$ [GQA 组内 Top-k block + 强制 local block]</code><br>
+<span class="idea"><span class="p">问题</span> agentic / 仓库级代码 / 持久记忆要求几十万到百万 token 联合注意力，softmax 部署不起；<span class="p">方法</span> 建在 GQA 上：切 KV block，轻量 Index Branch 按 group 算 token 分数、块内 max-pool 得 block 分数，每个 GQA group 独立 Top-k 选块并强制保留 local block，Main Branch 只在这些块上做精确 softmax；<span class="p">核心</span> 每 query 成本从 $O(N)$ 降到 $O(kB_k)$，1M 上下文 attention compute 降 28.4x、H800 上 prefill 14.2x / decode 7.6x（详见 <a href="sparse-attention.html">sparse-attention.html</a>）。</span></p>
 
 <h2>5. KV 驱逐 / 压缩（显存这条线）</h2>
 <p class="trend">H2O 开了「驱逐不重要的 KV」这条路，后面争三件事：重要性判得准不准、预算按层怎么分、判断开销多低。代表分别是观察窗口投票（SnapKV）、金字塔层自适应预算（PyramidKV）、只用 query 的近零开销估计（Quest）。再往深走是「压缩」而非「驱逐」——DMC 把 token 合并进固定 slot、YoCo 干脆只缓存一次 KV。核心矛盾是「越省越不准」，所以这条免训路线长期活在推理加速里。</p>

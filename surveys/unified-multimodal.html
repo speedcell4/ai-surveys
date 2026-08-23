@@ -69,7 +69,7 @@ window.MathJax = {
 <div class="deep">
 <p class="paper"><b>Tuna：Taming Unified Visual Representations</b>（<a href="https://arxiv.org/abs/2512.02014">2512.02014</a>）<br>
 <code class="recipe">Tuna: vae + rep(siglip) -&gt; ar / flow [1T]</code><br>
-<span class="idea"><span class="p">问题</span> 理解与生成各自一套编码器，视觉表示格式不匹配、难端到端；<span class="p">方法</span> 把 VAE 编码器与表示编码器（SigLIP）级联成一个统一的连续视觉表示，图像和视频都在同一空间里做理解 + 生成；<span class="p">效果</span> 图像/视频的理解、生成、编辑都 SOTA，且联合训练让两个任务互相受益而非打架。</span></p>
+<span class="idea"><span class="p">问题</span> 理解与生成各自一套编码器，视觉表示格式不匹配、难端到端；<span class="p">方法</span> 把 VAE 编码器与表示编码器（SigLIP）级联成一个统一的连续视觉表示，图像和视频都在同一空间里做理解 + 生成；<span class="p">效果</span> 7B 下 GenEval 0.90、MMStar 61.2%，且联合训练让两个任务互相受益而非打架。</span></p>
 </div>
 
 <div class="deep">
@@ -125,7 +125,7 @@ window.MathJax = {
 
 <p class="paper"><b>Show-o2</b>（<a href="https://arxiv.org/abs/2506.15564">2506.15564</a>）<br>
 <code class="recipe">Show-o2: vae+rep -&gt; ar / flow [1T]</code><br>
-<span class="idea"><span class="p">问题</span> Show-o 离散 token 有量化损失、质量受限；<span class="p">方法</span> 改用连续视觉表示（VAE + 表示编码器）、生成走 flow，理解生成共享；<span class="p">效果</span> 原生统一模型的连续表示路线，Tuna 对标的主要对象。</span></p>
+<span class="idea"><span class="p">问题</span> Show-o 离散 token 有量化损失、质量受限；<span class="p">方法</span> 改用连续视觉表示（VAE + 表示编码器）、生成走 flow，理解生成共享；<span class="p">效果</span> 7B 下理解 MME 1620.5、MMMU 48.9，生成 GenEval 0.76、DPG-Bench 86.14，是 Tuna 对标的主要对象。</span></p>
 
 <p class="paper"><b>Janus-Pro</b>（<a href="https://arxiv.org/abs/2501.17811">2501.17811</a>）<br>
 <code class="recipe">Janus-Pro: rep(理解) + vq(生成) -&gt; ar [dec，双端分离]</code><br>
@@ -133,18 +133,18 @@ window.MathJax = {
 
 <p class="paper"><b>JanusFlow</b>（<a href="https://arxiv.org/abs/2411.07975">2411.07975</a>，CVPR 2026）<br>
 <code class="recipe">JanusFlow: rep(理解) + vae(生成) -&gt; ar / flow [dec]</code><br>
-<span class="idea"><span class="p">问题</span> 离散 token 生成质量有限；<span class="p">方法</span> 保留 Janus 解耦思路，生成端换成 rectified flow + VAE；<span class="p">效果</span> 把自回归与 rectified flow 统一，生成质量大幅提升。</span></p>
+<span class="idea"><span class="p">问题</span> 离散 token 生成质量有限；<span class="p">方法</span> 保留 Janus 解耦思路，生成端换成 rectified flow + VAE；<span class="p">效果</span> 把自回归与 rectified flow 统一，GenEval 0.63、DPG-Bench 80.09%、MJHQ FID-30k 9.51，超 SDv1.5/SDXL。</span></p>
 
 <h3>3.4 统一 tokenizer / 编码器支线</h3>
 <p class="trend">要「理解 + 生成共用一套视觉表示」，tokenizer 是关键。这条支线专注做一个「既保留语义、又能重建」的统一视觉 tokenizer。</p>
 
 <p class="paper"><b>UniTok</b>（<a href="https://arxiv.org/abs/2502.20321">2502.20321</a>）<br>
-<code class="recipe">UniTok: unified-tokenizer -&gt; ar / diff [共享 token]</code><br>
-<span class="idea"><span class="p">问题</span> 理解与生成各用不同 tokenizer；<span class="p">方法</span> 训一个统一 tokenizer 同时服务理解与生成；<span class="p">效果</span> 统一 tokenizer 的早期探索。</span></p>
+<code class="recipe">UniTok: unified-tokenizer -&gt; ar / diff [重建 $L_R+\lambda_{VQ}L_{VQ}$ + 图文对比]</code><br>
+<span class="idea"><span class="p">问题</span> 理解与生成各用不同 tokenizer；<span class="p">方法</span> 联合训 VQ-VAE 重建（$L_R+\lambda_{VQ}L_{VQ}$）与 CLIP 风格图文对比损失；<span class="p">效果</span> 瓶颈在离散 token 的表示容量而非「重建 vs 语义」冲突，ImageNet rFID 0.38、零样本准确率 78.6%。</span></p>
 
 <p class="paper"><b>TokLIP</b>（<a href="https://arxiv.org/abs/2505.05422">2505.05422</a>）<br>
-<code class="recipe">TokLIP: 语义 token + 重建 -&gt; 统一表示</code><br>
-<span class="idea"><span class="p">问题</span> CLIP 类表示缺重建能力、VAE 缺语义；<span class="p">方法</span> 把视觉 token 同时对齐语义（CLIP 风格）与重建；<span class="p">效果</span> 语义 + 重建兼顾的统一表示。</span></p>
+<code class="recipe">TokLIP: 语义 token + 重建 -&gt; 统一表示 [InfoNCE 对齐文本 + MSE 蒸馏 CLIP]</code><br>
+<span class="idea"><span class="p">问题</span> CLIP 类表示缺重建能力、VAE 缺语义；<span class="p">方法</span> 目标 $L=L_{contra}+L_{distill}$：InfoNCE 把 TokLIP 图像特征与文本对齐，MSE 向预训练 CLIP 教师蒸馏，同时保留重建；<span class="p">效果</span> 语义 + 重建兼顾的统一表示。</span></p>
 
 <p class="paper"><b>BLIP3-o</b>（<a href="https://arxiv.org/abs/2505.09568">2505.09568</a>）<br>
 <code class="recipe">BLIP3-o: rep + vae -&gt; ar / flow [1T]</code><br>
