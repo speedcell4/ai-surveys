@@ -114,7 +114,7 @@ window.MathJax = {
 <code class="recipe">sparse(block + landmark) -&gt; 无限上下文 [landmark 代表块 + 检索]</code><br>
 <span class="idea"><span class="p">问题</span> 全注意力算不了无限长；<span class="p">方法</span> 每个 block 用 landmark token 做代表，query 先检索相关 block 再做局部注意力；<span class="p">核心</span> 检索式块稀疏的早期代表。</span></p>
 
-<p class="paper"><b>HiLS Attention</b>（<a href="https://arxiv.org/abs/2607.02980">2607.02980</a>，2026）<br>
+<p class="paper"><b>HiLS Attention</b>（<a href="https://arxiv.org/abs/2607.02980">2607.02980</a>，Tencent Hunyuan 2026）<br>
 <code class="recipe">sparse(block + 层级 landmark) -&gt; 64× 外推 [端到端 chunk 检索]</code><br>
 <span class="idea"><span class="p">问题</span> chunk 稀疏注意力选不准、追不上 full attention；<span class="p">方法</span> query 先对各 chunk 独立算注意力提取 chunk 信息，再按检索分数融合，检索分数端到端可学习；<span class="p">核心</span> 原生稀疏训练，64× 外推仍有 90% 检索准确率，现有模型轻量续训即可转换。</span></p>
 
@@ -179,6 +179,10 @@ window.MathJax = {
 <code class="recipe">evict(learned utility) -&gt; KV 3-10x 压缩 [预测未来效用 + 局部窗口]</code><br>
 <span class="idea"><span class="p">问题</span> 测试时 compute / agent 时代序列更长，KV 缓存是瓶颈；<span class="p">方法</span> 轻量效用预测器给每个 KV 打分，近 token 永远保留，旧 token 只有预测效用过阈值才写进缓存并参与全局注意力，与 LLM 端到端 next-token 联合训练；<span class="p">核心</span> 动态稀疏化（不固定压缩比），并揭示分层/分头稀疏模式可指导混合局部-全局架构设计。</span></p>
 
+<p class="paper"><b>Stem（Tencent Hunyuan）</b>（<a href="https://arxiv.org/abs/2603.06274">2603.06274</a>，ICML 2026）<br>
+<code class="recipe">sparse(token + 位置衰减/输出感知) -&gt; 省算力 + 降预填充延迟 [TPD + OAM]</code><br>
+<span class="idea"><span class="p">问题</span> 因果注意力里靠前 token 参与所有后续聚合，统一 top-k 稀疏忽略这种累积依赖；<span class="p">方法</span> Token Position-Decay 做位置相关的 top-k、保留靠前 token 的递归依赖；Output-Aware Metric 按近似输出幅度优先保留高影响 token；<span class="p">核心</span> 即插即用的预填充稀疏模块，省算力同时保精度。</span></p>
+
 <h2>8. 共识与分歧（速记版）</h2>
 <p><b>共识：</b></p>
 <ol>
@@ -196,7 +200,7 @@ window.MathJax = {
 </ol>
 
 <hr>
-<p class="note">说明：DeepSeek 谱系（NSA 2502.11089、DSA/V3.2 2512.02556、CSA+HCA/V4 2606.19348）已读原文/技术报告；其余论文摘要/标题经核实，arXiv 号均逐一核对。新增厂商落地（GLM-5 / LongCat LSA+LoZA / MiMo / HySparse / Step-3.5 Flash / Meta SP-KV）均已读摘要核实；Google Gemini、OpenAI、Anthropic、xAI 等闭源旗舰的注意力配方公开信息不足，未臆测收录。早期稀疏（Sparse Transformer 等）与 hardware 视角（FlashAttention/PagedAttention）的更完整展开见 <a href="long-context.html">long-context.html</a>；线性注意力那条路见 <a href="linear-attention.html">linear-attention.html</a>。</p>
+<p class="note">说明：DeepSeek 谱系（NSA 2502.11089、DSA/V3.2 2512.02556、CSA+HCA/V4 2606.19348）已读原文/技术报告；其余论文摘要/标题经核实，arXiv 号均逐一核对。新增厂商落地（GLM-5 / LongCat LSA+LoZA / MiMo / HySparse / Step-3.5 Flash / Meta SP-KV / Tencent Stem）均已读摘要核实；百度 ERNIE 4.5 引入 PLAS 稀疏注意力做推理加速（官方博客），公开技术细节有限，未单独成条；欧洲 Mistral 7B/Mixtral 用滑动窗口注意力（SWA）是厂商级 SWA 早期代表，但非中美、未单独成条；Google Gemini、OpenAI、Anthropic、xAI 等闭源旗舰的注意力配方公开信息不足，未臆测收录。早期稀疏（Sparse Transformer 等）与 hardware 视角（FlashAttention/PagedAttention）的更完整展开见 <a href="long-context.html">long-context.html</a>；线性注意力那条路见 <a href="linear-attention.html">linear-attention.html</a>。</p>
 
 </main>
 

@@ -210,6 +210,10 @@ window.MathJax = {
 <code class="recipe">low-rank(MFA) + AFD -&gt; 低解码成本 [注意力/FFN 分离 + 38B 激活]</code><br>
 <span class="idea"><span class="p">问题</span> 大模型解码硬件效率低、长上下文推理成本高；<span class="p">方法</span> 用 MFA 低秩压缩 KV，并把注意力与 FFN 拆成两个专用子系统（AFD）做分布式推理；<span class="p">核心</span> 321B VLM、38B 激活，Hopper 上解码吞吐超 DeepSeek-V3，是低秩 KV + 系统协同设计的效率路线。</span></p>
 
+<p class="paper"><b>SSE（Sparse State Expansion，ByteDance Seed）</b>（<a href="https://arxiv.org/abs/2507.16577">2507.16577</a>，2025）<br>
+<code class="recipe">linear(行稀疏更新 + state 分区) -&gt; 更强召回 + 更省参数 [top-k 硬分类 + SSE]</code><br>
+<span class="idea"><span class="p">问题</span> 线性注意力把上下文压进定长 state，in-context 检索和推理掉性能；<span class="p">方法</span> 把 state 更新看作信息分类，用 softmax top-k 硬分类做行稀疏更新；再提出 SSE 把 state 扩成多个分区，解耦参数规模与 state 容量；<span class="p">核心</span> 纯线性与混合 SSE-H 都有效，2B SSE-H 经 RL 后 AIME24 64.5 / AIME25 50.2，是字节跳动 Seed 的线性注意力路线。</span></p>
+
 <h2>8. 训练数据与 Benchmark（单独一节）</h2>
 <p class="trend">子平方架构能不能训起来、训完到底「真长」还是「假长」，是另一条独立的线：用什么数据/优化器训（K2 的 MuonClip、M2 的 agent 数据），以及用什么 benchmark 照出 recall / 真实上下文长度。</p>
 
@@ -257,7 +261,7 @@ window.MathJax = {
 </ol>
 
 <hr>
-<p class="note">说明：种子与点名论文（Gated DeltaNet 2412.06464、Kimi K3 2607.24653、Qwen3-Next/Gated Attention 2505.06708、Titans 2501.00663、TTT 2407.04620、MiniMax M2 2605.26494）已读摘要/方法；所有 arXiv 号已逐一核对。Ling-3.0-flash 信息来自官方博客；MFA / Step-3 属低秩 KV 压缩（$O(n^2)$ 注意力、非 $O(n)$ 线性），与 MLA 同族，放这里是因同属「注意力效率」谱系；MiniMax M2 报告摘要未展开注意力架构，已按此修订。稀疏注意力单独成篇：<a href="sparse-attention.html">sparse-attention.html</a>；长上下文整体脉络见 <a href="long-context.html">long-context.html</a>。「test-time training」在此按架构（TTT/Titans）并入；经典 continual learning 是另一主题。</p>
+<p class="note">说明：种子与点名论文（Gated DeltaNet 2412.06464、Kimi K3 2607.24653、Qwen3-Next/Gated Attention 2505.06708、Titans 2501.00663、TTT 2407.04620、MiniMax M2 2605.26494）已读摘要/方法；所有 arXiv 号已逐一核对。Ling-3.0-flash 信息来自官方博客；MFA / Step-3 属低秩 KV 压缩（$O(n^2)$ 注意力、非 $O(n)$ 线性），与 MLA 同族，放这里是因同属「注意力效率」谱系；MiniMax M2 报告摘要未展开注意力架构，已按此修订。ByteDance Seed 的 SSE 属「线性注意力 + 稀疏 state 扩展」研究路线；Qwen3.5 延续 hybrid linear/full，公开技术报告细节有限，未单独成条。稀疏注意力单独成篇：<a href="sparse-attention.html">sparse-attention.html</a>；长上下文整体脉络见 <a href="long-context.html">long-context.html</a>。「test-time training」在此按架构（TTT/Titans）并入；经典 continual learning 是另一主题。</p>
 
 </main>
 
