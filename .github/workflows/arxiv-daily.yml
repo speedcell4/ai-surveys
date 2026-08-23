@@ -28,7 +28,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch recent arXiv candidates
+      - name: Fetch recent arXiv and Hugging Face signals
         env:
           SINCE_HOURS: ${{ github.event.inputs.since_hours || '36' }}
         run: python3 scripts/fetch_arxiv_candidates.py "$SINCE_HOURS"

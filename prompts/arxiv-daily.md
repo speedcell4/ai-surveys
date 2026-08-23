@@ -6,7 +6,10 @@ Your task is to triage recent arXiv papers into the existing survey JSONL/HTML f
 
 ## Input
 
-`data/.arxiv_candidates.jsonl` contains recently submitted arXiv metadata. If it is empty or missing, make no edits and return a short note saying there were no candidates.
+`data/.arxiv_candidates.jsonl` contains recently submitted arXiv metadata.
+`data/.hf_top_papers.jsonl` contains the current monthly Hugging Face Papers top-voted list, including `upvotes`.
+
+If both files are empty or missing, make no edits and return a short note saying there were no candidates.
 
 Before editing, inspect:
 
@@ -16,6 +19,8 @@ Before editing, inspect:
 - `README.md`
 
 Use these to understand the current topic taxonomy and avoid duplicating papers already present.
+
+The Hugging Face upvote count is a **community importance signal**, not an automatic inclusion criterion. Give high-upvote papers extra review, and if they are relevant, prefer writing them into an existing JSONL/HTML. If an older `out` entry becomes highly upvoted or highly cited, use that as a trigger to revisit it and update its `status`/`why`/`revisit`.
 
 ## Decision rules
 
@@ -29,6 +34,7 @@ For each relevant candidate:
 6. Keep the total number of JSONL files as small as possible. Do not create fine-grained micro-topics.
 7. Generate a new HTML only when its JSONL has a coherent line and enough important node papers, roughly 8+ meaningful `in` entries or a clearly high-impact trend. Until then, it is fine to leave the JSONL as a decision ledger only.
 8. Use your own judgment for "important" and "many", based on the development trend of the field and how this repository already splits its other files.
+9. When cross-checking an HF paper, resolve its arXiv/venue metadata from the original page; do not trust the HF entry alone.
 
 ## Output constraints
 
